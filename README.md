@@ -4,6 +4,8 @@ Ateliê de pixel art para agentes de IA. O motor guarda a técnica (paleta, ramp
 
 > README de trabalho. A vitrine do projeto vem na #9.
 
+Agente: comece pelo [`AGENTS.md`](AGENTS.md). O guia de pixel art fica em [`pixel_atelier/guia/`](pixel_atelier/guia/indice.md), um capítulo por assunto (`python -m pixel_atelier guia [capitulo]`).
+
 ## O que já existe (v0.1, issue #1)
 
 - **Técnicas** (`pixel_atelier/`)
@@ -46,6 +48,7 @@ pixel-atelier mcp --raiz caminho/do/projeto   # ou python -m pixel_atelier mcp
 | `listar_estilos` | presets do pacote e do usuário |
 | `registrar_estilo` | guarda um estilo (objeto ou caminho `.json`) como preset com nome |
 | `ref` | tira o estilo de uma imagem de referência e grava como preset (ver Referência) |
+| `guia` | o índice do guia de pixel art, ou um capítulo pelo nome |
 
 Toda resposta é texto curto, nunca a imagem. Receita inválida volta como erro com a lista de problemas.
 
@@ -80,8 +83,8 @@ A receita `vale` acima, depois de `gerar`:
 ```
 vale.png: 320x180, cena com 4 camadas, nenhum alerta
 ok cores: 28 (limite 64)
-ok contraste: frente (04-chao) x fundo 0.31 (mín 0.10); entre camadas mín 0.18 em 03-arvore (mín 0.03)
-ok legibilidade: frente some no fundo em 0% da borda (máx 25%); fundo com faixa de valor 0.32 (mín 0.15)
+ok contraste: frente (04-chao) x fundo 0.31 (mín 0.10); entre camadas mín 0.18 em 03-arvore (mín 0.05)
+ok legibilidade: frente some no fundo em 0% da borda (máx 25%); fundo com faixa de valor 0.32 (mín 0.20)
 ok pixel solto: 0 (0.00%, máx 0.5%)
 ok pillow shading [heurística]: 3 silhuetas, nenhuma com miolo 0.06+ mais claro que a borda nos 4 lados
 ok serrilhado [heurística]: 3 degraus fora do ritmo em 742 (0.4%, máx 6%); mais em 03-arvore (2, o primeiro em (246,145))
@@ -94,15 +97,15 @@ Com problema, a linha diz o quanto e onde, por exemplo `alerta legibilidade: fre
 | Regra | Alerta quando |
 | --- | --- |
 | cores | mais de 16 num sprite ou 64 numa cena; com `--estilo`, cor fora da paleta |
-| contraste | mediana da diferença de valor na borda abaixo de 0,03 entre camadas ou 0,10 da frente contra o fundo |
-| legibilidade | a frente some (diferença < 0,05) em mais de 25% da borda, ou o fundo tem faixa de valor < 0,15 (fundo apagado: destaque por contraste, não escurecendo o fundo); sprite sozinho com faixa < 0,30 |
+| contraste | mediana da diferença de valor na borda abaixo de 0,05 entre camadas ou 0,10 da frente contra o fundo |
+| legibilidade | a frente some (diferença < 0,05) em mais de 25% da borda, ou o fundo tem faixa de valor < 0,20 (fundo apagado: destaque por contraste, não escurecendo o fundo); sprite sozinho com faixa < 0,30 |
 | pixel solto | mais de 0,5% dos pixels (pontilhado não conta) |
 | pillow shading | borda 0,06+ mais escura que o miolo nos 4 lados por igual |
 | serrilhado | mais de 6% dos degraus da silhueta fora do ritmo (3,1,3 ou 1,3,1) |
 | escala | 2+ ladrilhos de 16x16 com bloco de pixel diferente do resto |
 | composição repetida | trecho de 12x12 com detalhe igual 3+ vezes |
 
-Valor é a luminância (o teste em escala de cinza). Contraste, legibilidade e silhuetas precisam das camadas (a pasta que `gerar` grava, achada sozinha, ou `--camadas`) ou de um `--fundo`; sem elas a regra sai como `pulada`. Imagem ampliada (`-3x.png`) é revisada no tamanho real. As regras marcadas `[heurística]` são aproximações: confira na aprovação final. Névoa e raios em pontilhado ficam fora do contraste, porque são transparentes de propósito. Os limiares ficam no topo de `revisao.py`.
+Valor é a luminância (o teste em escala de cinza). Contraste, legibilidade e silhuetas precisam das camadas (a pasta que `gerar` grava, achada sozinha, ou `--camadas`) ou de um `--fundo`; sem elas a regra sai como `pulada`. Imagem ampliada (`-3x.png`) é revisada no tamanho real. As regras marcadas `[heurística]` são aproximações: confira na aprovação final. Névoa e raios em pontilhado ficam fora do contraste, porque são transparentes de propósito. Os limiares ficam no topo de `revisao.py`; o porquê de cada número está no capítulo da regra no guia.
 
 ## Referência (issue #5)
 
@@ -191,6 +194,7 @@ python -m pixel_atelier formas                               # parâmetros de ca
 python -m pixel_atelier estilos
 python -m pixel_atelier registrar-estilo meu-estilo.json [--nome nome] [--sobrescrever]
 python -m pixel_atelier ref referencia.png [--nome nome]       # estilo novo a partir de uma imagem
+python -m pixel_atelier guia [capitulo]                      # guia de pixel art: índice ou capítulo
 ```
 
 Grava `<cena>.png`, `<cena>-3x.png` e `<cena>/01-ceu.png`... e responde em texto, sem precisar abrir a imagem:
