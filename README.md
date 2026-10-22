@@ -29,6 +29,41 @@ Ateliê de pixel art para agentes de IA. O motor guarda a técnica (paleta, ramp
 | --- | --- | --- |
 | ![](exemplos/metroidvania-noturno-3x.png) | ![](exemplos/snes-diurno-3x.png) | ![](exemplos/game-boy-3x.png) |
 
+## Servidor MCP (issue #3)
+
+`servidor.py` expõe o ateliê por MCP (stdio), para qualquer cliente que fale o protocolo. O núcleo continua só com Pillow; o servidor vem no extra `mcp`.
+
+```
+pip install pixel-atelier[mcp]
+pixel-atelier mcp --raiz caminho/do/projeto   # ou python -m pixel_atelier mcp
+```
+
+| Ferramenta | O que faz |
+| --- | --- |
+| `gerar` | desenha uma receita (objeto, texto JSON ou caminho) e grava os PNGs; responde com o resumo |
+| `descrever_formas` | formas e parâmetros, com o padrão |
+| `listar_estilos` | presets do pacote e do usuário |
+| `registrar_estilo` | guarda um estilo (objeto ou caminho `.json`) como preset com nome |
+
+Toda resposta é texto curto, nunca a imagem. Receita inválida volta como erro com a lista de problemas.
+
+**Caminhos**: o servidor só lê e grava dentro da raiz (`--raiz`, ou a pasta onde ele subiu). Caminho relativo parte da raiz; caminho absoluto ou com `..` que saia dela é recusado. Sem `pasta`, `gerar` grava ao lado do arquivo da receita, ou na raiz quando a receita vem como objeto. `registrar_estilo` grava na pasta de presets do usuário, como na linha de comando.
+
+Configuração num cliente MCP genérico (o formato `mcpServers` que a maioria aceita):
+
+```json
+{
+  "mcpServers": {
+    "pixel-atelier": {
+      "command": "pixel-atelier",
+      "args": ["mcp", "--raiz", "/caminho/do/projeto"]
+    }
+  }
+}
+```
+
+Se o comando `pixel-atelier` não estiver no PATH do cliente, use `"command": "python"` com `"args": ["-m", "pixel_atelier", "mcp", "--raiz", "..."]`.
+
 ## Uso
 
 ```python
@@ -113,7 +148,7 @@ python exemplos/montar_cena.py
 python -m pixel_atelier gerar exemplos/snes-diurno.json
 ```
 
-Requer Python 3.11+ e Pillow. Sem numpy.
+Requer Python 3.11+ e Pillow. Sem numpy. O servidor MCP pede o pacote `mcp` (extra `[mcp]`, já incluso no `[dev]`). O servidor MCP pede o pacote `mcp` (extra `[mcp]`, já incluso no `[dev]`).
 
 ## Licença
 
