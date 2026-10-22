@@ -1,0 +1,16 @@
+{
+  "name": "pixel-atelier",
+  "version": "0.1.0",
+  "description": "Ateliê de pixel art para agentes de IA: técnica guardada no motor, arte saindo de receitas curtas.",
+  "mcpServers": {
+    "pixel-atelier": {
+      "command": "pixel-atelier",
+      "args": [
+        "mcp",
+        "--raiz",
+        "${workspacePath}"
+      ]
+    }
+  },
+  "contextFileName": "GEMINI.md"
+}

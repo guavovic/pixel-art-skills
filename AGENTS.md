@@ -33,6 +33,7 @@ python exemplos/montar_cena.py          # regrava os PNGs de exemplo
 - Mudou uma forma ou um preset: rode `montar_cena.py` e confira que os exemplos passam no `revisar` sem alerta (`tests/test_guia.py`).
 - Capítulo novo do guia: um `.md` curto em `pixel_atelier/guia/`, com linha no `indice.md`.
 - Ferramenta MCP nova: uma função em `criar_servidor` (`pixel_atelier/servidor.py`), docstring curta, resposta em texto.
+- Embalagens das ferramentas de agente (`embalagens/` e `.claude-plugin/marketplace.json`) saem de `python scripts/embalar.py` e nunca são editadas à mão. A fonte é este arquivo (seções Por onde começar, Fluxo de trabalho e Regras de arte), os capítulos do guia, as ferramentas de `servidor.py` e o `pyproject.toml`: mudou algum, rode o script (o teste `tests/test_embalagens.py` falha se esquecer).
 
 ## Contribuição
 - Tudo em português do Brasil: código, comentários, mensagens, documentação.

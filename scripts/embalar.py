@@ -1,0 +1,318 @@
+"""Gera a embalagem de cada ferramenta de agente a partir de uma fonte só.
+
+Fonte (editada à mão):
+    AGENTS.md                       seções "Por onde começar", "Fluxo de trabalho" e "Regras de arte"
+    pixel_atelier/guia/             nomes dos capítulos
+    pixel_atelier/servidor.py       ferramentas MCP (nome e docstring de cada uma)
+    pyproject.toml                  nome, versão, descrição e o comando do servidor
+
+Saída (nunca editada à mão, sempre regenerada por este script):
+    embalagens/claude-code/         plugin do Claude Code (.claude-plugin/plugin.json, .mcp.json, skill)
+    embalagens/codex/               skill em .agents/skills e servidor em .codex/config.toml
+    embalagens/gemini/              extensão do Gemini CLI (gemini-extension.json, GEMINI.md)
+    embalagens/cursor/              regra em .cursor/rules e servidor em .cursor/mcp.json
+    embalagens/copilot/             .github/copilot-instructions.md e servidor em .vscode/mcp.json
+    embalagens/README.md            onde colocar cada uma
+    .claude-plugin/marketplace.json marketplace do repositório, aponta para embalagens/claude-code
+
+Uso (Python 3.11+, sem dependência):
+    python scripts/embalar.py             regenera tudo
+    python scripts/embalar.py --conferir  só confere; sai com 1 se alguma embalagem estiver desatualizada
+"""
+from __future__ import annotations
+
+import argparse
+import ast
+import json
+import re
+import shutil
+import sys
+import tomllib
+from pathlib import Path
+
+RAIZ = Path(__file__).resolve().parent.parent
+SAIDA = "embalagens"
+MARKETPLACE = ".claude-plugin/marketplace.json"
+
+REPO = "https://github.com/guavovic/pixel-atelier"
+AUTOR = {"name": "Gustavo Victor", "url": "https://github.com/guavovic"}
+INSTALAR = f'pip install "pixel-atelier[mcp] @ git+{REPO}"'
+DESCRICAO_SKILL = (
+    "Pixel art por receita JSON curta com o servidor MCP pixel-atelier: cenário em camadas com laço, "
+    "estilo tirado de uma imagem de referência e revisão das regras de pixel art em texto, sem abrir a imagem. "
+    "Use quando o pedido for criar, ajustar ou revisar pixel art (cenário, parallax, paleta, sprite)."
+)
+SECOES_AGENTS = ("Por onde começar", "Fluxo de trabalho", "Regras de arte")
+# Trechos do AGENTS.md que só fazem sentido dentro do repositório; cada um precisa existir na fonte.
+TROCAS_AGENTS = [("Formato no README, seção Receita.", f"Formato na [seção Receita do README]({REPO}#receita).")]
+
+AVISO = ("Arquivo gerado por scripts/embalar.py a partir de AGENTS.md, pixel_atelier/guia/, "
+         "pixel_atelier/servidor.py e pyproject.toml. Não edite à mão: mude a fonte e rode o script de novo.")
+
+
+class ErroDeFonte(Exception):
+    """A fonte não tem o que o script espera; melhor parar do que gerar embalagem errada."""
+
+
+# ---------------------------------------------------------------- leitura da fonte
+
+def ler(caminho: Path) -> str:
+    return caminho.read_text(encoding="utf-8").replace("\r\n", "\n")
+
+
+def projeto(raiz: Path) -> dict:
+    """Nome, versão, descrição e o comando do servidor, do pyproject.toml."""
+    dados = tomllib.loads(ler(raiz / "pyproject.toml"))["project"]
+    comandos = dados.get("scripts", {})
+    if dados["name"] not in comandos:
+        raise ErroDeFonte(f"pyproject.toml sem o comando {dados['name']!r} em [project.scripts]")
+    return {"nome": dados["name"], "versao": dados["version"], "descricao": dados["description"]}
+
+
+def secoes_agents(raiz: Path) -> str:
+    """As seções de uso do AGENTS.md, na ordem, com os trechos de dentro do repositório trocados."""
+    texto = ler(raiz / "AGENTS.md")
+    partes = []
+    for titulo in SECOES_AGENTS:
+        achou = re.search(rf"^## {re.escape(titulo)}\n(.*?)(?=^## |\Z)", texto, re.M | re.S)
+        if not achou:
+            raise ErroDeFonte(f"AGENTS.md sem a seção '## {titulo}'")
+        partes.append(f"## {titulo}\n{achou.group(1).strip()}\n")
+    secoes = "\n".join(partes)
+    for antes, depois in TROCAS_AGENTS:
+        if antes not in secoes:
+            raise ErroDeFonte(f"AGENTS.md sem o trecho {antes!r}; ajuste TROCAS_AGENTS em scripts/embalar.py")
+        secoes = secoes.replace(antes, depois)
+    return secoes
+
+
+def capitulos(raiz: Path) -> list[str]:
+    pasta = raiz / "pixel_atelier" / "guia"
+    nomes = sorted(a.stem for a in pasta.glob("*.md") if a.stem != "indice")
+    if not nomes:
+        raise ErroDeFonte("pixel_atelier/guia/ sem capítulo")
+    return nomes
+
+
+def ferramentas(raiz: Path) -> list[tuple[str, str]]:
+    """(nome, descrição) de cada ferramenta MCP, lidos de `@ferramenta(name=...)` em servidor.py."""
+    arvore = ast.parse(ler(raiz / "pixel_atelier" / "servidor.py"))
+    lista = []
+    for no in ast.walk(arvore):
+        if not isinstance(no, ast.FunctionDef):
+            continue
+        for decorador in no.decorator_list:
+            if isinstance(decorador, ast.Call) and getattr(decorador.func, "id", None) == "ferramenta":
+                nome = next((k.value.value for k in decorador.keywords if k.arg == "name"), None)
+                if not nome or not ast.get_docstring(no):
+                    raise ErroDeFonte(f"ferramenta em servidor.py sem name ou sem docstring (linha {no.lineno})")
+                lista.append((nome, " ".join(ast.get_docstring(no).split())))
+    if not lista:
+        raise ErroDeFonte("nenhuma @ferramenta(name=...) em pixel_atelier/servidor.py")
+    return lista
+
+
+def fonte(raiz: Path = RAIZ) -> dict:
+    return {**projeto(raiz), "secoes": secoes_agents(raiz), "capitulos": capitulos(raiz),
+            "ferramentas": ferramentas(raiz)}
+
+
+# ---------------------------------------------------------------- texto comum
+
+def instrucoes(f: dict) -> str:
+    """O texto que toda embalagem carrega: servidor, ferramentas, o fluxo do AGENTS.md e o guia."""
+    lista = "\n".join(f"- `{nome}`: {descricao}" for nome, descricao in f["ferramentas"])
+    nomes = ", ".join(f"`{n}`" for n in f["capitulos"])
+    return (
+        f"# {f['nome']}\n\n"
+        f"{f['descricao']}\n\n"
+        "## Servidor MCP\n"
+        f"Esta embalagem registra o servidor `{f['nome']}` (`{f['nome']} mcp --raiz <pasta do projeto>`), "
+        "que só lê e grava dentro da raiz. Ele precisa estar instalado:\n\n"
+        f"```\n{INSTALAR}\n```\n\n"
+        "Ferramentas (toda resposta é texto, nenhuma devolve imagem):\n\n"
+        f"{lista}\n\n"
+        "Sem o servidor ligado, o mesmo fluxo roda pela linha de comando `python -m pixel_atelier`.\n\n"
+        f"{f['secoes']}\n"
+        "## Guia\n"
+        f"Capítulos: {nomes}. Comece pelo índice (`guia` sem capítulo) e leia só o capítulo do assunto da vez.\n"
+    )
+
+
+def json_texto(dados: dict) -> str:
+    return json.dumps(dados, ensure_ascii=False, indent=2) + "\n"
+
+
+def yaml_texto(valor: str) -> str:
+    """String YAML entre aspas duplas (dois-pontos na descrição quebram YAML sem aspas)."""
+    return '"' + valor.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
+def frontmatter(campos: dict[str, str | bool]) -> str:
+    linhas = [f"{k}: {str(v).lower() if isinstance(v, bool) else yaml_texto(v)}" for k, v in campos.items()]
+    return "---\n" + "\n".join(linhas) + "\n---\n"
+
+
+def markdown(texto: str, campos: dict | None = None) -> str:
+    return (frontmatter(campos) + "\n" if campos else "") + f"<!-- {AVISO} -->\n\n" + texto
+
+
+def servidor_stdio(f: dict, raiz: str | None, **extra) -> dict:
+    """Entrada de servidor stdio: `pixel-atelier mcp [--raiz <variável da pasta do projeto>]`."""
+    args = ["mcp", "--raiz", raiz] if raiz else ["mcp"]
+    return {f["nome"]: {**extra, "command": f["nome"], "args": args}}
+
+
+def skill(f: dict) -> str:
+    return markdown(instrucoes(f), {"name": f["nome"], "description": DESCRICAO_SKILL})
+
+
+# ---------------------------------------------------------------- cada ferramenta
+
+def claude_code(f: dict) -> dict[str, str]:
+    base = f"{SAIDA}/claude-code"
+    plugin = {"name": f["nome"], "version": f["versao"], "description": f["descricao"], "author": AUTOR,
+              "homepage": REPO, "repository": REPO, "license": "MIT",
+              "keywords": ["pixel-art", "mcp", "parallax", "paleta"]}
+    return {
+        f"{base}/.claude-plugin/plugin.json": json_texto(plugin),
+        f"{base}/.mcp.json": json_texto({"mcpServers": servidor_stdio(f, "${CLAUDE_PROJECT_DIR}")}),
+        f"{base}/skills/{f['nome']}/SKILL.md": skill(f),
+        MARKETPLACE: json_texto({
+            "name": f["nome"],
+            "description": "Marketplace do pixel-atelier: o plugin com o servidor MCP e a skill do fluxo.",
+            "owner": AUTOR,
+            "plugins": [{"name": f["nome"], "source": f"./{base}", "description": f["descricao"],
+                         "category": "design"}],
+        }),
+    }
+
+
+def codex(f: dict) -> dict[str, str]:
+    base = f"{SAIDA}/codex"
+    config = (
+        f"# {AVISO}\n"
+        "# O servidor sobe na pasta onde o Codex abriu; para outra raiz, acrescente \"--raiz\", \"<pasta>\" em args.\n"
+        f"[mcp_servers.{f['nome']}]\n"
+        f"command = {json.dumps(f['nome'])}\n"
+        'args = ["mcp"]\n'
+    )
+    return {
+        f"{base}/.agents/skills/{f['nome']}/SKILL.md": skill(f),
+        f"{base}/.codex/config.toml": config,
+    }
+
+
+def gemini(f: dict) -> dict[str, str]:
+    base = f"{SAIDA}/gemini"
+    manifesto = {"name": f["nome"], "version": f["versao"], "description": f["descricao"],
+                 "mcpServers": servidor_stdio(f, "${workspacePath}"), "contextFileName": "GEMINI.md"}
+    return {
+        f"{base}/gemini-extension.json": json_texto(manifesto),
+        f"{base}/GEMINI.md": markdown(instrucoes(f)),
+    }
+
+
+def cursor(f: dict) -> dict[str, str]:
+    base = f"{SAIDA}/cursor/.cursor"
+    regra = {"description": DESCRICAO_SKILL, "alwaysApply": False}
+    return {
+        f"{base}/rules/{f['nome']}.mdc": markdown(instrucoes(f), regra),
+        f"{base}/mcp.json": json_texto({"mcpServers": servidor_stdio(f, "${workspaceFolder}", type="stdio")}),
+    }
+
+
+def copilot(f: dict) -> dict[str, str]:
+    base = f"{SAIDA}/copilot"
+    return {
+        f"{base}/.github/copilot-instructions.md": markdown(instrucoes(f)),
+        f"{base}/.vscode/mcp.json": json_texto({"servers": servidor_stdio(f, "${workspaceFolder}", type="stdio")}),
+    }
+
+
+LEIAME = """<!-- {aviso} -->
+
+# Embalagens
+
+O pixel-atelier no formato de cada ferramenta de agente. Tudo aqui é gerado por `python scripts/embalar.py` a partir de `AGENTS.md`, do guia, de `pixel_atelier/servidor.py` e do `pyproject.toml`: para mudar, edite a fonte e rode o script. Cada embalagem registra o servidor MCP e leva o mesmo texto de fluxo (estilo ou `ref`, receita, `gerar`, `revisar` em texto, imagem só na aprovação final).
+
+Antes de qualquer uma, instale o servidor:
+
+```
+{instalar}
+```
+
+| Pasta | Ferramenta | O que tem | Onde colocar |
+|---|---|---|---|
+| `claude-code/` | Claude Code | plugin: `.claude-plugin/plugin.json`, `.mcp.json` e a skill `skills/{nome}/` | `/plugin install {nome} --marketplace guavovic/pixel-atelier`, ou em dois passos `/plugin marketplace add guavovic/pixel-atelier` e `/plugin install {nome}@{nome}` (o marketplace fica em `.claude-plugin/marketplace.json` na raiz do repositório); no clone, `claude --plugin-dir embalagens/claude-code` |
+| `codex/` | OpenAI Codex | skill em `.agents/skills/{nome}/` e servidor em `.codex/config.toml` | as duas pastas na raiz do projeto (o `.codex/config.toml` do projeto só vale em projeto confiável), ou a skill em `~/.agents/skills/` e o trecho `[mcp_servers.{nome}]` em `~/.codex/config.toml` |
+| `gemini/` | Gemini CLI | extensão: `gemini-extension.json` (com o servidor) e `GEMINI.md` | `gemini extensions install <clone>/embalagens/gemini` (ou `gemini extensions link` para acompanhar o clone) |
+| `cursor/` | Cursor | regra `.cursor/rules/{nome}.mdc`, aplicada quando o agente acha que o pedido pede, e servidor em `.cursor/mcp.json` | a pasta `.cursor/` na raiz do projeto, ou o servidor em `~/.cursor/mcp.json` |
+| `copilot/` | GitHub Copilot | `.github/copilot-instructions.md` e servidor em `.vscode/mcp.json` | as duas pastas na raiz do repositório; se ele já tiver `copilot-instructions.md`, junte o texto ao que existe |
+
+O servidor recebe a pasta do projeto pela variável de cada ferramenta (`${{CLAUDE_PROJECT_DIR}}`, `${{workspacePath}}`, `${{workspaceFolder}}`); no Codex ele sobe sem `--raiz`, na pasta onde o Codex abriu.
+
+Embalagem disponível não quer dizer testada: o teste em cada ferramenta é a issue #8.
+"""
+
+
+def montar(raiz: Path = RAIZ) -> dict[str, str]:
+    """Todos os arquivos gerados, caminho relativo à raiz do repositório para o conteúdo."""
+    f = fonte(raiz)
+    arquivos: dict[str, str] = {}
+    for embalagem in (claude_code, codex, gemini, cursor, copilot):
+        arquivos.update(embalagem(f))
+    arquivos[f"{SAIDA}/README.md"] = LEIAME.format(aviso=AVISO, instalar=INSTALAR, nome=f["nome"])
+    return arquivos
+
+
+def existentes(raiz: Path = RAIZ) -> dict[str, str]:
+    """O que está no disco hoje: tudo em embalagens/ e o marketplace."""
+    caminhos = [c for c in (raiz / SAIDA).rglob("*") if c.is_file()] if (raiz / SAIDA).exists() else []
+    if (raiz / MARKETPLACE).is_file():
+        caminhos.append(raiz / MARKETPLACE)
+    return {c.relative_to(raiz).as_posix(): ler(c) for c in caminhos}
+
+
+def diferencas(raiz: Path = RAIZ) -> list[str]:
+    """Caminhos que faltam, sobram ou mudaram em relação ao que a fonte gera."""
+    novos, atuais = montar(raiz), existentes(raiz)
+    return sorted(set(novos) ^ set(atuais) | {k for k in set(novos) & set(atuais) if novos[k] != atuais[k]})
+
+
+def gravar(raiz: Path = RAIZ) -> int:
+    novos = montar(raiz)
+    shutil.rmtree(raiz / SAIDA, ignore_errors=True)
+    for relativo, conteudo in novos.items():
+        destino = raiz / relativo
+        destino.parent.mkdir(parents=True, exist_ok=True)
+        with open(destino, "w", encoding="utf-8", newline="\n") as arquivo:
+            arquivo.write(conteudo)
+    return len(novos)
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description="Gera as embalagens de cada ferramenta a partir da fonte.")
+    parser.add_argument("--conferir", action="store_true", help="só confere se as embalagens estão em dia")
+    args = parser.parse_args(argv)
+    for saida in (sys.stdout, sys.stderr):  # acento certo também no console do Windows
+        if hasattr(saida, "reconfigure"):
+            saida.reconfigure(encoding="utf-8")
+    try:
+        if args.conferir:
+            faltam = diferencas()
+            if faltam:
+                print("embalagens desatualizadas; rode python scripts/embalar.py. Diferenças:")
+                print("\n".join(f"  {c}" for c in faltam))
+                return 1
+            print(f"embalagens em dia ({len(montar())} arquivos)")
+            return 0
+        print(f"{gravar()} arquivos gerados em {SAIDA}/ e {MARKETPLACE}")
+    except ErroDeFonte as erro:
+        print(f"erro: {erro}", file=sys.stderr)
+        return 2
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
