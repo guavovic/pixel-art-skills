@@ -12,7 +12,10 @@ na aprovação final. Tudo é determinístico e só usa Pillow.
 
 O que entra:
 - cena (imagem opaca): com as camadas (a pasta `<cena>/` que `gerar` grava, achada sozinha, ou
-  `camadas=`), dá para medir contraste entre camadas, frente contra o fundo e silhuetas;
+  `camadas=`), dá para medir contraste entre camadas, frente contra o fundo e silhuetas; sem elas,
+  contraste e legibilidade saem das silhuetas que `silhuetas.separar` tira do composto (heurística:
+  mediana da borda entre elas e a borda das que chegam no pé da imagem), e pillow shading e
+  serrilhado pulam;
 - sprite (imagem com transparência): sozinho ou por cima de um `fundo`, em `posicao`;
 - imagem ampliada (blocos NxN, como `<cena>-3x.png`) volta para o tamanho real antes da revisão.
 
@@ -329,11 +332,13 @@ class _DoComposto:
 def _do_composto(cena: _Px) -> _DoComposto:
     resultado = _DoComposto(0, [], [])
     for s in separar(cena.imagem):
-        f = _Px(s.imagem)
-        prof = _profundidade(f)
-        if _atmosfera(f, prof):
+        # tudo no recorte da silhueta com 1 pixel de folga: na beira da imagem o recorte para nela, igual
+        x0, y0, x1, y1 = s.caixa
+        caixa = (max(0, x0 - 1), max(0, y0 - 1), min(cena.largura, x1 + 1), min(cena.altura, y1 + 1))
+        f = _Px(s.imagem.crop(caixa))
+        if _atmosfera(f, _profundidade(f)):
             continue
-        borda = _borda(f, cena)
+        borda = [(x + caixa[0], y + caixa[1], d) for x, y, d in _borda(f, _Px(cena.imagem.crop(caixa)))]
         if not borda:
             continue
         resultado.silhuetas += 1
