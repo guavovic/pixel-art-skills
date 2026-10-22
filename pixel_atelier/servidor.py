@@ -9,8 +9,9 @@ lista de problemas, sem stack trace.
 Regra dos caminhos: tudo que o servidor lê ou grava por caminho (receita, pasta de saída, JSON
 de estilo) fica dentro da raiz, que é a pasta de `--raiz` ou, sem ela, a pasta onde o servidor
 subiu. Caminho relativo parte da raiz; caminho absoluto vale só se cair dentro dela; `..` ou
-atalho que leve para fora é recusado. A exceção é `registrar_estilo`, que grava na pasta de
-presets do usuário (a mesma da linha de comando), com nome validado.
+atalho que leve para fora é recusado. A exceção é `registrar_estilo` e `ref`, que gravam na
+pasta de presets do usuário (a mesma da linha de comando), com nome validado; a imagem que `ref`
+lê fica dentro da raiz.
 
 Ferramenta nova entra em `criar_servidor` com `@ferramenta(name=...)`: uma função por ferramenta,
 com a docstring curta (é a descrição que o agente lê a cada sessão).
@@ -26,13 +27,15 @@ from mcp.types import ToolAnnotations
 from pydantic import Field
 
 from . import __version__
-from .estilo import descrever_estilos, registrar_estilo
+from .estilo import NOME_VALIDO, descrever_estilos, registrar_estilo
 from .gerador import gerar
 from .receita import ErroDeReceita, descrever_formas
+from .referencia import CORES, ref
 from .revisao import revisar
 
 INSTRUCOES = ("Pixel art a partir de uma receita JSON curta. Veja descrever_formas e listar_estilos, "
-              "depois gerar e revisar. Respostas em texto; abra o PNG só na aprovação final.")
+              "depois gerar e revisar. Estilo novo: ref numa imagem de referência. "
+              "Respostas em texto; abra o PNG só na aprovação final.")
 
 SO_LEITURA = ToolAnnotations(read_only_hint=True)
 
@@ -120,5 +123,28 @@ def criar_servidor(raiz: str | Path | None = None) -> MCPServer:
         except (OSError, KeyError, ValueError, TypeError) as erro:
             raise ToolError(f"estilo não registrado: {erro.args[0] if erro.args else erro}") from None
         return f"preset {destino.stem} gravado em {destino.as_posix()}"
+
+    @ferramenta(name="ref")
+    def _ref(
+        imagem: Annotated[str, Field(description="caminho do PNG de referência (ampliado também serve)")],
+        nome: Annotated[str | None, Field(description="nome do preset (padrão: o do arquivo)")] = None,
+        base: Annotated[str, Field(description="preset ou .json que dá o que a imagem não diz")] = "snes-diurno",
+        cores: Annotated[int, Field(description="máximo de cores da paleta", ge=2, le=256)] = CORES,
+        sobrescrever: bool = False,
+    ) -> str:
+        """Tira paleta, rampas, pixel e contraste de uma imagem de referência e grava como preset."""
+        arquivo = dentro_da_raiz(raiz, imagem, "imagem")
+        if not arquivo.is_file():
+            raise ToolError(f"arquivo {imagem!r} não existe dentro da raiz {raiz.as_posix()}")
+        if base.endswith(".json"):
+            estilo_base: str | Path = dentro_da_raiz(raiz, base, "base")
+        elif NOME_VALIDO.match(base):
+            estilo_base = base
+        else:
+            raise ToolError(f"base {base!r} deve ser o nome de um preset ou um arquivo .json")
+        try:
+            return ref(arquivo, nome, base=estilo_base, cores=cores, sobrescrever=sobrescrever).resumo()
+        except (OSError, KeyError, ValueError, TypeError) as erro:
+            raise ToolError(f"preset não gravado: {erro.args[0] if erro.args else erro}") from None
 
     return servidor
