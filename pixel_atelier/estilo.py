@@ -36,10 +36,12 @@ from __future__ import annotations
 import json
 import os
 import re
+from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass, field
 from importlib import resources
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
 
 from .cor import RGB, cor_mais_proxima, gerar_rampa, hex_para_rgb, luminancia, misturar, rgb_para_hex, sem_repetir
 
@@ -222,6 +224,39 @@ VARIAVEL_PRESETS = "PIXEL_ATELIER_ESTILOS"
 NOME_VALIDO = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
 
 
+# Dentro de `estilos_so_em`, estilo dado como caminho .json só vale se cair na raiz (é o que o MCP usa).
+_RAIZ_DOS_JSON: ContextVar[Path | None] = ContextVar("raiz_dos_json_de_estilo", default=None)
+
+
+@contextmanager
+def estilos_so_em(raiz: Path) -> Iterator[None]:
+    """Durante o bloco, caminho .json de estilo (e de `base`) relativo parte da raiz e fora dela é recusado."""
+    marca = _RAIZ_DOS_JSON.set(Path(raiz).resolve())
+    try:
+        yield
+    finally:
+        _RAIZ_DOS_JSON.reset(marca)
+
+
+def validar_nome_de_estilo(nome: object, o_que: str = "estilo") -> str:
+    """O nome de um preset: minúsculo com hífens, sem barra nem `..` (nunca vira caminho)."""
+    if not isinstance(nome, str) or not NOME_VALIDO.match(nome):
+        raise ValueError(f"nome de {o_que} {nome!r} inválido: use o nome de um preset (minúsculo com hífens, "
+                         f"ex.: snes-diurno) ou o caminho de um arquivo .json")
+    return nome
+
+
+def _arquivo_json_do_estilo(caminho: Path) -> Path:
+    raiz = _RAIZ_DOS_JSON.get()
+    if raiz is not None:
+        caminho = (raiz / caminho).resolve()
+        if not caminho.is_relative_to(raiz):
+            raise ValueError(f"o estilo {caminho.name!r} fica fora da raiz {raiz.as_posix()}; use um caminho dentro dela")
+    if not caminho.is_file():
+        raise KeyError(f"o arquivo de estilo {caminho.as_posix()!r} não existe")
+    return caminho
+
+
 def _pasta_de_estilos():
     return resources.files("pixel_atelier") / "estilos"
 
@@ -279,8 +314,10 @@ def dados_do_estilo(estilo: "str | Path | dict[str, Any] | Estilo", _nivel: int 
         return dados
     if not isinstance(estilo, (str, Path)):
         raise TypeError(f"estilo deve ser nome, caminho, dicionário ou Estilo, veio {type(estilo).__name__}")
-    caminho = Path(estilo)
-    arquivo = caminho if caminho.suffix == ".json" and caminho.is_file() else _arquivo_do_preset(str(estilo))
+    if Path(estilo).suffix == ".json":
+        arquivo = _arquivo_json_do_estilo(Path(estilo))
+    else:
+        arquivo = _arquivo_do_preset(validar_nome_de_estilo(str(estilo)))
     if arquivo is None:
         raise KeyError(f"estilo {str(estilo)!r} não existe; os que existem: {', '.join(listar_estilos())}")
     return dados_do_estilo(json.loads(arquivo.read_text(encoding="utf-8")), _nivel + 1)
