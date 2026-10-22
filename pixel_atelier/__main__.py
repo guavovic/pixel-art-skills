@@ -1,13 +1,15 @@
 """Linha de comando. Tudo responde em texto curto.
 
     python -m pixel_atelier gerar receita.json [--pasta saida]   # "-" lê a receita da entrada padrão
+    python -m pixel_atelier revisar cena.png [--fundo cena.png] [--estilo nome]   # relatório em texto
     python -m pixel_atelier formas                               # parâmetros de cada forma, com o padrão
     python -m pixel_atelier estilos                              # presets disponíveis
     python -m pixel_atelier registrar-estilo estilo.json [--nome nome] [--sobrescrever]
     python -m pixel_atelier mcp [--raiz pasta]                   # servidor MCP por stdio (extra [mcp])
 
 Sem `--pasta`, `gerar` grava ao lado do arquivo da receita (ou na pasta atual, com "-").
-Receita inválida sai com código 2 e a lista de problemas.
+Receita inválida sai com código 2 e a lista de problemas. `revisar` sai com 0 mesmo com alerta
+(o relatório é a resposta) e com 2 quando não consegue ler a imagem.
 """
 from __future__ import annotations
 
@@ -19,6 +21,7 @@ from pathlib import Path
 from .estilo import descrever_estilos, registrar_estilo
 from .gerador import gerar
 from .receita import ErroDeReceita, descrever_formas, ler_receita
+from .revisao import revisar
 
 
 def _gerar(args: argparse.Namespace) -> int:
@@ -32,6 +35,17 @@ def _gerar(args: argparse.Namespace) -> int:
         print(erro, file=sys.stderr)
         return 2
     print(resultado.resumo())
+    return 0
+
+
+def _revisar(args: argparse.Namespace) -> int:
+    try:
+        revisao = revisar(args.imagem, camadas=args.camadas, fundo=args.fundo,
+                          posicao=tuple(args.posicao) if args.posicao else None, estilo=args.estilo)
+    except (OSError, KeyError, ValueError) as erro:
+        print(f"revisão não feita: {erro.args[0] if erro.args else erro}", file=sys.stderr)
+        return 2
+    print(revisao.resumo())
     return 0
 
 
@@ -73,6 +87,15 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("receita", help='arquivo da receita, ou "-" para ler da entrada padrão')
     p.add_argument("--pasta", "-o", type=Path, help="onde gravar (padrão: ao lado da receita)")
     p.set_defaults(funcao=_gerar)
+
+    p = comandos.add_parser("revisar", help="confere uma imagem pelas regras de pixel art")
+    p.add_argument("imagem", type=Path, help="PNG da cena ou do sprite (ampliado também serve)")
+    p.add_argument("--camadas", type=Path, help="pasta das camadas (padrão: a pasta <cena>/ ao lado, se existir)")
+    p.add_argument("--fundo", type=Path, help="cena por trás do sprite, para medir contraste e legibilidade")
+    p.add_argument("--posicao", type=int, nargs=2, metavar=("X", "Y"),
+                   help="canto do sprite no fundo (padrão: no meio)")
+    p.add_argument("--estilo", help="confere as cores contra a paleta deste estilo")
+    p.set_defaults(funcao=_revisar)
 
     p = comandos.add_parser("formas", help="lista as formas e os parâmetros")
     p.set_defaults(funcao=lambda _: print(descrever_formas()) or 0)

@@ -29,9 +29,10 @@ from . import __version__
 from .estilo import descrever_estilos, registrar_estilo
 from .gerador import gerar
 from .receita import ErroDeReceita, descrever_formas
+from .revisao import revisar
 
 INSTRUCOES = ("Pixel art a partir de uma receita JSON curta. Veja descrever_formas e listar_estilos, "
-              "depois gerar. Respostas em texto; abra o PNG só se precisar.")
+              "depois gerar e revisar. Respostas em texto; abra o PNG só na aprovação final.")
 
 SO_LEITURA = ToolAnnotations(read_only_hint=True)
 
@@ -70,6 +71,28 @@ def criar_servidor(raiz: str | Path | None = None) -> MCPServer:
             return gerar(receita, pasta=saida).resumo(base=raiz)
         except ErroDeReceita as erro:
             raise ToolError(str(erro)) from None
+
+    @ferramenta(name="revisar", annotations=SO_LEITURA)
+    def _revisar(
+        imagem: Annotated[str, Field(description="caminho do PNG da cena ou do sprite")],
+        camadas: Annotated[str | None, Field(description="pasta das camadas (padrão: <cena>/ ao lado)")] = None,
+        fundo: Annotated[str | None, Field(description="cena por trás do sprite")] = None,
+        posicao: Annotated[list[int] | None, Field(description="[x, y] do sprite no fundo (padrão: no meio)",
+                                                   min_length=2, max_length=2)] = None,
+        estilo: Annotated[str | None, Field(description="preset ou .json para conferir a paleta")] = None,
+    ) -> str:
+        """Confere a imagem pelas regras de pixel art e responde com o relatório: ok ou alerta por regra."""
+        arquivo = dentro_da_raiz(raiz, imagem, "imagem")
+        if not arquivo.is_file():
+            raise ToolError(f"arquivo {imagem!r} não existe dentro da raiz {raiz.as_posix()}")
+        if estilo and estilo.endswith(".json"):
+            estilo = dentro_da_raiz(raiz, estilo, "estilo")
+        try:
+            return revisar(arquivo, camadas=dentro_da_raiz(raiz, camadas, "camadas") if camadas else None,
+                           fundo=dentro_da_raiz(raiz, fundo, "fundo") if fundo else None,
+                           posicao=tuple(posicao) if posicao else None, estilo=estilo).resumo()
+        except (OSError, KeyError, ValueError) as erro:
+            raise ToolError(f"revisão não feita: {erro.args[0] if erro.args else erro}") from None
 
     @ferramenta(name="descrever_formas", annotations=SO_LEITURA)
     def _descrever_formas() -> str:
