@@ -22,7 +22,7 @@ dev = ["pytest>=8", "mcp>=2.3,<3"]
 include = ["pixel_atelier*"]
 
 [tool.setuptools.package-data]
-pixel_atelier = ["estilos/*.json"]
+pixel_atelier = ["estilos/*.json", "guia/*.md"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -21,10 +21,10 @@ olhar valor e não matiz é o teste da imagem em escala de cinza.
   Pares de cores quase iguais (distância RGB < 4) aparecem no texto, sem virar alerta.
 - contraste: na borda de cada silhueta, a diferença de valor contra o que está atrás (o pixel da
   borda ou o de dentro dele, o que contrastar mais, para o contorno escuro em fundo escuro não
-  contar como falha). Mediana de pelo menos 0,03 entre camadas e 0,10 da frente contra o fundo.
+  contar como falha). Mediana de pelo menos 0,05 entre camadas e 0,10 da frente contra o fundo.
 - legibilidade: a frente some no fundo onde a diferença fica abaixo de 0,05; alerta se isso
   passar de 25% da borda. Regra da casa: destacar por contraste, não apagar o fundo; fundo com
-  faixa de valor (percentil 5 a 95) abaixo de 0,15 é alerta de fundo apagado. Sprite sozinho
+  faixa de valor (percentil 5 a 95) abaixo de 0,20 é alerta de fundo apagado. Sprite sozinho
   precisa de faixa de valor de pelo menos 0,30.
 - pixel solto: a mesma definição de `pintura.limpar_soltos` (os 4 vizinhos de uma mesma cor
   diferente da dele), sem contar pontilhado (mesma cor na diagonal ou a 2 e 4 pixels). Alerta
@@ -41,8 +41,8 @@ olhar valor e não matiz é o teste da imagem em escala de cinza.
   linhas e 6 colunas diferentes (tronco e faixa não contam); textura periódica e pontilhado (mais
   de 25% de blocos 2x2 em xadrez) também não.
 
-Os limiares são de partida, escolhidos para os exemplos do pacote passarem sem alerta; o guia de
-artista (#6) pode trocar por números melhores.
+Cada limiar está explicado no capítulo da regra no guia (`pixel_atelier/guia/`, índice em
+`indice.md`); mudou aqui, muda lá.
 
 Camada de atmosfera (névoa e raios em pontilhado: mais borda do que miolo) fica fora do
 contraste e das silhuetas, porque ela é transparente de propósito.
@@ -64,11 +64,11 @@ from .imagem import abrir, compor, escala_inteira, reduzir
 CORES_SPRITE = 16
 CORES_CENA = 64  # o SNES põe até 128 cores de fundo na tela (8 subpaletas de 16); 64 deixa folga sem virar foto
 QUASE_IGUAL = 4  # distância RGB abaixo disso: duas cores que o olho não separa (só informa)
-CONTRASTE_CAMADAS = 0.03  # o fundo pode ter pouco contraste (perspectiva atmosférica), não nenhum
-CONTRASTE_FRENTE = 0.10
+CONTRASTE_CAMADAS = 0.05  # o passo mínimo visível (= SOME): o longe pode ter pouco contraste, não nenhum
+CONTRASTE_FRENTE = 0.10  # o dobro do mínimo: a frente é o que precisa ler
 SOME = 0.05  # diferença de valor abaixo disso: a borda some no fundo
 SOME_MAX = 0.25
-FAIXA_FUNDO = 0.15
+FAIXA_FUNDO = 0.20  # fundo empurrado todo para o escuro (0,05 a 0,25) já é fundo apagado
 FAIXA_SPRITE = 0.30
 SOLTOS_MAX = 0.005
 PILLOW_MIOLO = 0.06

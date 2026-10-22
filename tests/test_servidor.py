@@ -35,7 +35,8 @@ def test_lista_as_ferramentas_so_com_texto(tmp_path):
             return (await cliente.list_tools()).tools
 
     ferramentas = {f.name: f for f in asyncio.run(rodar())}
-    assert set(ferramentas) == {"gerar", "revisar", "descrever_formas", "listar_estilos", "registrar_estilo", "ref"}
+    assert set(ferramentas) == {"gerar", "revisar", "descrever_formas", "listar_estilos", "registrar_estilo", "ref",
+                                "guia"}
     assert all(f.output_schema is None for f in ferramentas.values())  # sem cópia estruturada do texto
     assert all(len(f.description) < 120 for f in ferramentas.values())
 
@@ -115,6 +116,16 @@ def test_descrever_formas_e_listar_estilos(tmp_path):
     nomes = {linha.split(":")[0] for linha in estilos.splitlines()}
     assert {"game-boy", "metroidvania-noturno", "snes-diurno"} <= nomes
     assert "snes-diurno: Dia claro" in estilos
+
+
+def test_guia_devolve_o_indice_e_um_capitulo(tmp_path):
+    servidor = criar_servidor(tmp_path)
+    erro, indice = chamar(servidor, "guia")
+    assert not erro and indice.startswith("# Guia de pixel art") and "`erros`" in indice
+    erro, texto = chamar(servidor, "guia", capitulo="cor")
+    assert not erro and texto.startswith("# Cor")
+    erro, texto = chamar(servidor, "guia", capitulo="../README")
+    assert erro and "não existe; há: angulo" in texto
 
 
 def test_registrar_estilo_por_objeto_e_por_arquivo(tmp_path):
