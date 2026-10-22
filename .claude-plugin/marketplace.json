@@ -1,0 +1,16 @@
+{
+  "name": "pixel-atelier",
+  "description": "Marketplace do pixel-atelier: o plugin com o servidor MCP e a skill do fluxo.",
+  "owner": {
+    "name": "Gustavo Victor",
+    "url": "https://github.com/guavovic"
+  },
+  "plugins": [
+    {
+      "name": "pixel-atelier",
+      "source": "./embalagens/claude-code",
+      "description": "Ateliê de pixel art para agentes de IA: técnica guardada no motor, arte saindo de receitas curtas.",
+      "category": "design"
+    }
+  ]
+}

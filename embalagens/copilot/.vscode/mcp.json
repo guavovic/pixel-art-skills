@@ -1,0 +1,13 @@
+{
+  "servers": {
+    "pixel-atelier": {
+      "type": "stdio",
+      "command": "pixel-atelier",
+      "args": [
+        "mcp",
+        "--raiz",
+        "${workspaceFolder}"
+      ]
+    }
+  }
+}

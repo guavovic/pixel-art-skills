@@ -1,0 +1,5 @@
+# Arquivo gerado por scripts/embalar.py a partir de AGENTS.md, pixel_atelier/guia/, pixel_atelier/servidor.py e pyproject.toml. Não edite à mão: mude a fonte e rode o script de novo.
+# O servidor sobe na pasta onde o Codex abriu; para outra raiz, acrescente "--raiz", "<pasta>" em args.
+[mcp_servers.pixel-atelier]
+command = "pixel-atelier"
+args = ["mcp"]
