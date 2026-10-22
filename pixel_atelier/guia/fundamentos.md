@@ -22,15 +22,17 @@ Cada pixel é uma decisão. Nada de filtro, borrão ou anti-alias automático.
 - Contorno preto puro em tudo achata; prefira a cor mais escura da rampa (no estilo: `contorno_cor`).
 - Linha interna só onde há dobra ou separação de peças; não contorne cada detalhe.
 - No motor: `"contorno": true` no estilo; `luz_contorno` dá a borda clara do lado da luz.
+- `revisar` (linha `contorno preto`): contorno é a borda com **0,85** ou mais numa cor só (`CONTORNO_UMA_COR`), diferente do miolo. Alerta quando todos os contornos são preto puro, canal até **8** (`PRETO`, #080808); contorno escuro colorido não conta.
 
 ## Anti-alias à mão
 - Anti-alias (AA) é um pixel de tom intermediário no canto do degrau para suavizar a curva. Feito à mão, poucos e só onde o degrau incomoda.
 - Use 1 tom intermediário da rampa, no degrau mais longo; nunca em volta da forma inteira (vira borrão).
 - Não use AA na borda externa de sprite que vai sobre fundo variado: o tom intermediário só serve contra uma cor de fundo.
 - Sprite pequeno (16 px ou menos) quase nunca precisa de AA.
+- `revisar` (linha `anti-alias`, heurística): meio-tom é o pixel da borda com alfa parcial, ou com valor entre o de dentro e o de trás a pelo menos **0,05** (`SOME`) de cada um. Alerta quando o meio-tom passa de **0,8** da borda em cada um dos 4 lados (`AA_LADO`): AA à mão fica em poucos degraus; a borda clara das nuvens do motor chega a 0,61.
 
 ## Como pedir
 - Contorno e luz de contorno: campos `contorno` e `luz_contorno` do estilo (`{"base": "snes-diurno", "contorno": false}` na receita).
-- Conferir: `python -m pixel_atelier revisar cena.png` e ler as linhas `pixel solto` e `serrilhado`.
+- Conferir: `python -m pixel_atelier revisar cena.png` e ler as linhas `pixel solto`, `serrilhado`, `contorno preto` e `anti-alias`.
 
 Fontes: Derek Yu, "Pixel Art Tutorial" (derekyu.com/makegames/pixelart.html) e "Common Mistakes" (derekyu.com/makegames/pixelart2.html); tutoriais de Pedro Medeiros (saint11.art/blog/pixel-art-tutorials).

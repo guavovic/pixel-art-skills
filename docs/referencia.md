@@ -142,9 +142,13 @@ ok serrilhado [heurística]: 3 degraus fora do ritmo em 742 (0.4%, máx 6%); mai
 ok escala [heurística]: bloco 1x em 148 de 148 ladrilhos 16x16
 ok composição repetida [heurística]: nenhum trecho 12x12 igual 3+ vezes
 ok laço: emenda x319|x0 dentro do normal no composto e 4 camadas (composto 0.04, média entre colunas 0.05; máx 3x a média); laço pela marca do gerar
+pulada matiz da rampa: sem estilo (passe estilo: as rampas vêm dele)
+ok contorno preto: nenhuma silhueta com contorno de uma cor só
+ok anti-alias [heurística]: 1 silhueta, nenhuma com meio-tom em 80%+ da borda nos 4 lados
+ok linha 2:1 [heurística]: nenhuma linha 2:1 (6+ degraus de 2)
 ```
 
-Com problema, a linha diz o quanto e onde, por exemplo `alerta legibilidade: frente some no fundo em 100% da borda (máx 25%), x15-32 y17-30; ...`. Alerta de contraste ou de legibilidade termina com a ação: aumentar o contraste de valor da frente, nunca escurecer nem apagar o fundo.
+Com problema, a linha diz o quanto e onde, por exemplo `alerta legibilidade: frente some no fundo em 100% da borda (máx 25%), x15-32 y17-30; ...`. Alerta de contraste ou de legibilidade termina com a ação: aumentar o contraste de valor da frente, nunca escurecer nem apagar o fundo. Os alertas de matiz da rampa, contorno preto, anti-alias e linha 2:1 terminam com o capítulo do guia que explica a correção (`guia cor`, `guia fundamentos`, `guia angulo`).
 
 | Regra | Alerta quando |
 | --- | --- |
@@ -157,8 +161,12 @@ Com problema, a linha diz o quanto e onde, por exemplo `alerta legibilidade: fre
 | serrilhado | mais de 6% dos degraus da silhueta fora do ritmo (3,1,3 ou 1,3,1) |
 | escala | 2+ ladrilhos de 16x16 com bloco de pixel diferente do resto |
 | composição repetida | trecho de 12x12 com detalhe igual 3+ vezes |
+| matiz da rampa | com `--estilo`: rampa do estilo usada na imagem que muda menos de 3° de matiz do escuro ao claro (só cores com saturação 0,20+; rampa toda abaixo de valor 0,25 fica de fora) |
+| contorno preto | todos os contornos (borda com 85%+ numa cor só, diferente do miolo) em preto puro, canal até 8 |
+| anti-alias | meio-tom (alfa parcial, ou valor entre o de dentro e o de trás) em 80%+ da borda em cada um dos 4 lados |
+| linha 2:1 | degrau de 1 ou 3 entre dois de 2 numa linha 2:1 (6+ degraus, 85%+ deles de 2) |
 
-Valor é a luminância (o teste em escala de cinza). Contraste, legibilidade e silhuetas precisam das camadas (a pasta que `gerar` grava, achada sozinha, ou `--camadas`) ou de um `--fundo`; sem elas a regra sai como `pulada`. Imagem ampliada (`-3x.png`) é revisada no tamanho real. As regras marcadas `[heurística]` são aproximações: confira na aprovação final. Névoa e raios em pontilhado ficam fora do contraste, porque são transparentes de propósito. Os limiares ficam no topo de `revisao.py`; o porquê de cada número está no capítulo da regra no guia.
+Valor é a luminância (o teste em escala de cinza). A visão (lateral, 3/4, isométrica) e o tempo de animação não são conferidos: dependem do que a imagem quer ser, e ficam para a aprovação final. Contraste, legibilidade e silhuetas precisam das camadas (a pasta que `gerar` grava, achada sozinha, ou `--camadas`) ou de um `--fundo`; sem elas a regra sai como `pulada`. Imagem ampliada (`-3x.png`) é revisada no tamanho real. As regras marcadas `[heurística]` são aproximações: confira na aprovação final. Névoa e raios em pontilhado ficam fora do contraste, porque são transparentes de propósito. Os limiares ficam no topo de `revisao.py`; o porquê de cada número está no capítulo da regra no guia.
 
 ## Estilo por referência
 

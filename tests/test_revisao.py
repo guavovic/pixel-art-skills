@@ -139,7 +139,8 @@ def test_sprite_sozinho_precisa_de_faixa_de_valor():
 def test_cena_sem_camadas_pula_o_que_precisa_delas():
     revisao = revisar(faixas(32, 32, [50, 150]))
     assert {c.regra for c in revisao.checagens if c.estado == "pulada"} == {
-        "contraste", "legibilidade", "pillow shading", "serrilhado", "escala", "laço"}  # escala: chapado demais
+        "contraste", "legibilidade", "pillow shading", "serrilhado", "escala", "laço", "matiz da rampa",
+        "contorno preto", "anti-alias", "linha 2:1"}  # escala: chapado demais
 
 
 # --- laço ----------------------------------------------------------------------------------------
@@ -256,6 +257,84 @@ def test_serrilhado_degraus_regulares_e_fora_do_ritmo():
     assert c.estado == "alerta" and c.heuristica and "mais em sprite" in c.detalhe
 
 
+# --- matiz da rampa ------------------------------------------------------------------------------
+
+def listras(cores) -> Image.Image:
+    """Uma faixa vertical de 4 pixels por cor, para a imagem usar a rampa inteira."""
+    imagem = chapa(4 * len(cores), 8)
+    for i, cor in enumerate(cores):
+        imagem.paste(tuple(cor) + (255,), (4 * i, 0, 4 * i + 4, 8))
+    return imagem
+
+
+def test_rampa_com_e_sem_mudanca_de_matiz():
+    snes = carregar_estilo("snes-diurno")
+    ok = regra(revisar(listras(snes.rampas["folha"]), estilo=snes), "matiz da rampa")
+    assert ok.estado == "ok" and "menor mudança 48° em folha (mín 3°)" in ok.detalhe
+
+    plastico = carregar_estilo({"base": "snes-diurno", "nome": "plastico",
+                                "rampas": {"folha": {"base": "#3c8c34", "passos": 5, "matiz": 0}}})
+    c = regra(revisar(listras(plastico.rampas["folha"]), estilo=plastico), "matiz da rampa")
+    assert c.estado == "alerta" and c.detalhe.startswith("folha #") and "muda 0°, em (0,0) (mín 3°)" in c.detalhe
+    assert c.detalhe.endswith("puxe a sombra para o frio e a luz para o quente (guia cor)")
+
+    noite = carregar_estilo("metroidvania-noturno")  # folha toda abaixo de 0,25: no escuro o matiz não conta
+    assert regra(revisar(listras(noite.rampas["folha"]), estilo=noite), "matiz da rampa").estado == "pulada"
+    assert regra(revisar(listras(snes.rampas["folha"])), "matiz da rampa").detalhe.startswith("sem estilo")
+
+
+# --- contorno preto ------------------------------------------------------------------------------
+
+def contornado(contorno) -> Image.Image:
+    """Sprite 16x16: contorno de 1 pixel, miolo médio e um brilho no meio."""
+    sprite = caixa(16, 16, contorno, (2, 2, 14, 14))
+    sprite.paste(cinza(150), (3, 3, 13, 13))
+    sprite.paste(cinza(220), (5, 5, 9, 9))
+    return sprite
+
+
+def test_contorno_preto_puro_e_contorno_da_rampa():
+    c = regra(revisar(contornado((0, 0, 0, 255))), "contorno preto")
+    assert c.estado == "alerta" and c.detalhe.startswith("1 de 1 contornos em preto puro (até #080808)")
+    assert "o primeiro em sprite (" in c.detalhe and c.detalhe.endswith("(guia fundamentos)")
+    assert regra(revisar(contornado((32, 24, 58, 255))), "contorno preto").detalhe.startswith("0 de 1")
+    chapado = caixa(16, 16, (0, 0, 0, 255), (2, 2, 14, 14))  # silhueta toda preta: não é contorno
+    assert regra(revisar(chapado), "contorno preto").detalhe == "nenhuma silhueta com contorno de uma cor só"
+
+
+# --- anti-alias ----------------------------------------------------------------------------------
+
+def test_anti_alias_em_volta_da_forma_e_borda_limpa():
+    fundo = faixas(32, 32, [60])
+    limpo = caixa(14, 14, cinza(240), (1, 1, 13, 13))
+    c = regra(revisar(limpo, fundo=fundo), "anti-alias")
+    assert c.estado == "ok" and c.heuristica
+
+    borrado = caixa(14, 14, cinza(150), (0, 0, 14, 14))  # anel de meio-tom entre o branco e o fundo
+    borrado.paste(cinza(240), (1, 1, 13, 13))
+    c = regra(revisar(borrado, fundo=fundo), "anti-alias")
+    assert c.estado == "alerta" and "sprite: meio-tom em 100%+ da borda nos 4 lados (máx 80%)" in c.detalhe
+    assert c.detalhe.endswith("(guia fundamentos)")
+
+    meio_alfa = caixa(16, 16, (240, 240, 240, 128), (1, 1, 15, 15))  # sprite sozinho: alfa parcial na borda
+    meio_alfa.paste(cinza(240), (2, 2, 14, 14))
+    assert regra(revisar(meio_alfa), "anti-alias").estado == "alerta"
+
+
+# --- linha 2:1 -----------------------------------------------------------------------------------
+
+def test_linha_isometrica_inteira_e_quebrada():
+    c = regra(revisar(rampa([2] * 9)), "linha 2:1")
+    assert c.estado == "ok" and c.detalhe == "1 linha 2:1, nenhuma quebrada"
+    quebrada = revisar(rampa([2, 2, 2, 2, 1, 2, 2, 2, 2]))
+    c = regra(quebrada, "linha 2:1")
+    assert c.estado == "alerta" and c.detalhe.startswith("1 degrau fora do 2 em 1 linha 2:1, o primeiro de 1 em sprite")
+    assert c.detalhe.endswith("o 2:1 é 2,2,2, nunca 2,1,2 (guia angulo)")
+    assert regra(quebrada, "serrilhado").estado == "ok"  # o serrilhado genérico não pega o 2,1,2
+    ondulado = regra(revisar(rampa([2, 2, 3, 2, 3, 2, 2, 2])), "linha 2:1")  # terreno: menos de 85% de 2
+    assert ondulado.estado == "ok" and ondulado.detalhe.startswith("nenhuma linha 2:1")
+
+
 # --- escala --------------------------------------------------------------------------------------
 
 def test_escala_mista_e_imagem_ampliada():
@@ -308,8 +387,8 @@ def test_cena_do_gerar_acha_as_camadas_e_responde_curto(tmp_path):
     assert revisao.camadas == ["01-ceu", "02-arvore", "03-chao"]
     linhas = revisao.resumo().splitlines()
     assert linhas[0].startswith("vale.png: 96x64, cena com 3 camadas, ")
-    assert len(linhas) == 10 and all(linha.split()[0] in ("ok", "alerta", "pulada") for linha in linhas[1:])
-    assert sum("[heurística]" in linha for linha in linhas) == 4
+    assert len(linhas) == 14 and all(linha.split()[0] in ("ok", "alerta", "pulada") for linha in linhas[1:])
+    assert sum("[heurística]" in linha for linha in linhas) == 6
     assert len(revisao.resumo()) < 1200  # é o que o agente lê no lugar da imagem
     ampliada = revisar(tmp_path / "vale-2x.png")
     assert ampliada.escala == 2 and ampliada.camadas == revisao.camadas

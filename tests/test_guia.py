@@ -37,7 +37,9 @@ def test_nome_desconhecido_lista_os_que_existem():
 
 LIMIARES = ("CORES_SPRITE", "CORES_CENA", "QUASE_IGUAL", "CONTRASTE_CAMADAS", "CONTRASTE_FRENTE", "SOME", "SOME_MAX",
             "FAIXA_FUNDO", "FAIXA_SPRITE", "SOLTOS_MAX", "PILLOW_MIOLO", "PILLOW_LADOS", "SERRILHADO_MAX", "LADRILHO",
-            "LADRILHOS_FORA", "JANELA", "COPIAS", "ATMOSFERA", "LACO_EMENDA")
+            "LADRILHOS_FORA", "JANELA", "COPIAS", "ATMOSFERA", "LACO_EMENDA",
+            "RAMPA_MATIZ", "RAMPA_SATURACAO", "RAMPA_ESCURA", "CONTORNO_UMA_COR", "PRETO", "AA_LADO", "ISO_DEGRAUS",
+            "ISO_DOIS")
 
 
 def _escrito(nome: str, valor: float) -> set[str]:
@@ -60,11 +62,11 @@ def test_cada_limiar_do_revisar_esta_no_guia():
                        for n in _escrito(nome, getattr(revisao, nome))), (nome, linha)
 
 
-@pytest.mark.parametrize("nome", ["metroidvania-noturno", "snes-diurno"])
+@pytest.mark.parametrize("nome", ["metroidvania-noturno", "snes-diurno", "game-boy"])
 def test_exemplos_do_pacote_passam_sem_alerta(nome, tmp_path):
     receita = json.loads((EXEMPLOS / f"{nome}.json").read_text(encoding="utf-8"))
     gerar({**receita, "saida": "tudo", "ampliar": 1}, pasta=tmp_path)
-    resultado = revisar(tmp_path / f"{nome}.png", laco=True)  # as cenas do pacote dão a volta
+    resultado = revisar(tmp_path / f"{nome}.png", laco=True, estilo=nome)  # as cenas do pacote dão a volta
     assert len(resultado.camadas) == len(receita["camadas"])
     assert not resultado.alertas(), resultado.resumo()
 

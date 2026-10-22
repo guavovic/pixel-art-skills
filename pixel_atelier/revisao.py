@@ -49,6 +49,15 @@ olhar valor e não matiz é o teste da imagem em escala de cinza.
   diferenças entre colunas vizinhas e também da maior delas: num laço certo a emenda é só mais um
   par de colunas, então nunca é a maior da imagem com folga; num laço quebrado (objeto cortado,
   degradê que não volta) ela é.
+- matiz da rampa (precisa do `estilo`): cada rampa do estilo que a imagem usa, com 3 ou mais cores de
+  saturação 0,2+, muda pelo menos 3 graus de matiz do tom escuro ao claro. Rampa toda abaixo de
+  valor 0,25 (silhueta noturna) fica de fora.
+- contorno preto: contorno é a borda com 85% ou mais numa cor só, diferente do miolo. Alerta quando
+  todos os contornos são preto puro (canal até 8).
+- anti-alias (heurística): meio-tom na borda (alfa parcial, ou valor entre o de dentro e o de trás a
+  0,05 de cada um) em 80% ou mais de cada um dos 4 lados da silhueta.
+- linha 2:1 (heurística): escada de 6+ degraus (sem as pontas) com 85% ou mais de degraus de 2 é
+  linha isométrica; degrau de 1 ou 3 entre dois de 2 é alerta (o serrilhado genérico não pega 2,1,2).
 
 Cada limiar está explicado no capítulo da regra no guia (`pixel_atelier/guia/`, índice em
 `indice.md`); mudou aqui, muda lá.
@@ -58,6 +67,7 @@ contraste e das silhuetas, porque ela é transparente de propósito.
 """
 from __future__ import annotations
 
+import colorsys
 import math
 from collections import Counter
 from dataclasses import dataclass, field
@@ -92,6 +102,14 @@ JANELA_VARIADA = 6  # linhas e colunas diferentes que o trecho precisa ter
 COPIAS = 3
 ATMOSFERA = 0.5  # camada com mais pixels de borda do que isso (fração) é névoa ou raio pontilhado
 LACO_EMENDA = 3  # emenda acima disso vezes a média entre colunas vizinhas (e acima da maior) é laço quebrado
+RAMPA_MATIZ = 3  # graus do escuro ao claro: abaixo disso é só o arredondamento do RGB, a rampa só muda o brilho
+RAMPA_SATURACAO = 0.2  # cor menos saturada que isso é quase cinza: o matiz dela não conta
+RAMPA_ESCURA = 0.25  # rampa toda abaixo desse valor (silhueta noturna): no escuro o matiz quase não aparece
+CONTORNO_UMA_COR = 0.85  # fração da borda numa cor só para ela contar como contorno
+PRETO = 8  # canal até isso (#080808): preto puro
+AA_LADO = 0.8  # fração da borda em meio-tom, em cada um dos 4 lados, para ser anti-alias em volta da forma
+ISO_DEGRAUS = 6  # degraus de uma linha (sem as pontas) para ela contar como linha 2:1
+ISO_DOIS = 0.85  # fração desses degraus com 2 pixels para a linha ser 2:1 (1 fora do 2 a cada 7)
 DICA_CONTRASTE = ("aumente o contraste de valor da frente (clareie ou escureça a frente ou o contorno), "
                   "nunca escureça nem apague o fundo")
 
@@ -597,6 +615,154 @@ def _detalhada(janela: bytes) -> bool:
     return True
 
 
+# --- regras do guia: rampa, contorno, anti-alias e linha 2:1 -------------------------------------
+
+def _hsv(cor: Sequence[int]) -> tuple[float, float]:
+    """(matiz em graus, saturação de 0 a 1)."""
+    h, s, _ = colorsys.rgb_to_hsv(cor[0] / 255, cor[1] / 255, cor[2] / 255)
+    return h * 360, s
+
+
+def _rampa_matiz(alvo: Image.Image, estilo: Estilo | None) -> Checagem:
+    """Rampas do estilo que a imagem usa: o matiz precisa andar do escuro ao claro."""
+    if estilo is None:
+        return Checagem("matiz da rampa", "pulada", "sem estilo (passe estilo: as rampas vêm dele)")
+    px = alvo.load()
+    onde: dict[tuple[int, int, int], tuple[int, int]] = {}
+    for y in range(alvo.height):
+        for x in range(alvo.width):
+            r, g, b, a = px[x, y]
+            if a and (r, g, b) not in onde:
+                onde[(r, g, b)] = (x, y)
+    conferidas, sem = [], []
+    for papel, rampa in estilo.rampas.items():
+        if sum(c in onde for c in set(rampa)) < 2:
+            continue  # rampa que a imagem não usa
+        if max(luminancia(c) for c in rampa) < RAMPA_ESCURA:
+            continue
+        cores = sorted({c for c in rampa if _hsv(c)[1] >= RAMPA_SATURACAO}, key=luminancia)
+        if len(cores) < 3:
+            continue  # rampa quase cinza ou curta demais para ter matiz
+        muda = abs((_hsv(cores[-1])[0] - _hsv(cores[0])[0] + 180) % 360 - 180)
+        conferidas.append((papel, muda))
+        if muda < RAMPA_MATIZ:
+            x, y = next(onde[c] for c in rampa if c in onde)
+            sem.append(f"{papel} {rgb_para_hex(cores[0])} > {rgb_para_hex(cores[-1])} muda {muda:.0f}°, em ({x},{y})")
+    if not conferidas:
+        return Checagem("matiz da rampa", "pulada", f"nenhuma rampa de {estilo.nome} com 3+ cores saturadas na imagem")
+    if sem:
+        return Checagem("matiz da rampa", "alerta", "; ".join(sem[:3]) + f" (mín {RAMPA_MATIZ}°); a rampa só muda o "
+                        "brilho: puxe a sombra para o frio e a luz para o quente (guia cor)")
+    papel, muda = min(conferidas, key=lambda c: c[1])
+    return Checagem("matiz da rampa", "ok", f"{len(conferidas)} rampa{'s' if len(conferidas) > 1 else ''} de "
+                    f"{estilo.nome}, menor mudança {muda:.0f}° em {papel} (mín {RAMPA_MATIZ}°)")
+
+
+def _contorno_preto(silhuetas: list[tuple[str, _Px, dict[tuple[int, int], int]]]) -> Checagem:
+    """Contorno é a borda quase toda numa cor só, diferente do miolo; alerta se todos forem preto puro."""
+    if not silhuetas:
+        return Checagem("contorno preto", "pulada", "sem silhueta (passe camadas ou um sprite)")
+    com_contorno, pretas = 0, []
+    for nome, s, prof in silhuetas:
+        borda = [p for p, v in prof.items() if v == 1]
+        miolo = Counter(s.px[p][:3] for p, v in prof.items() if v > 1)
+        if len(borda) < 8 or not miolo:
+            continue
+        cor, quantas = Counter(s.px[p][:3] for p in borda).most_common(1)[0]
+        if quantas < CONTORNO_UMA_COR * len(borda) or miolo.most_common(1)[0][0] == cor:
+            continue  # sem contorno, ou silhueta chapada
+        com_contorno += 1
+        if max(cor) <= PRETO:
+            pretas.append((nome, next(p for p in borda if s.px[p][:3] == cor)))
+    if not com_contorno:
+        return Checagem("contorno preto", "ok", "nenhuma silhueta com contorno de uma cor só")
+    detalhe = f"{len(pretas)} de {com_contorno} contornos em preto puro (até {rgb_para_hex((PRETO,) * 3)})"
+    if pretas and len(pretas) == com_contorno:
+        nome, (x, y) = pretas[0]
+        return Checagem("contorno preto", "alerta", detalhe + f", o primeiro em {nome} ({x},{y}); contorno preto em "
+                        "tudo achata: use a cor mais escura da rampa da forma (guia fundamentos)")
+    return Checagem("contorno preto", "ok", detalhe)
+
+
+def _anti_alias(silhuetas: list[tuple[str, _Px, dict[tuple[int, int], int]]], atras_de: dict[str, _Px]) -> Checagem:
+    """Meio-tom na borda: alfa parcial, ou valor entre o de dentro e o de trás com um passo visível de cada lado."""
+    if not silhuetas:
+        return Checagem("anti-alias", "pulada", "sem silhueta (passe camadas ou um sprite)", True)
+    achadas, conferidas = [], 0
+    for nome, s, prof in silhuetas:
+        tras = atras_de.get(nome)
+        lados: dict[str, list[int]] = {lado: [0, 0] for lado in LADOS.values()}  # [meio-tom, total]
+        primeiro = None
+        for (x, y), v in prof.items():
+            if v != 1:
+                continue
+            for (dx, dy), lado in LADOS.items():
+                fx, fy, ix, iy = x + dx, y + dy, x - dx, y - dy
+                if not s.dentro(fx, fy) or s.cheio(fx, fy):
+                    continue
+                if s.px[x, y][3] < 255:
+                    meio = True
+                elif tras is None or not tras.cheio(fx, fy) or prof.get((ix, iy), 0) < 2:
+                    continue
+                else:
+                    dentro, fora, aqui = s.valor(ix, iy), tras.valor(fx, fy), s.valor(x, y)
+                    meio = min(dentro, fora) + SOME <= aqui <= max(dentro, fora) - SOME
+                lados[lado][1] += 1
+                if meio:
+                    lados[lado][0] += 1
+                    primeiro = primeiro or (x, y)
+        if any(total < 4 for _, total in lados.values()):
+            continue
+        conferidas += 1
+        pior = min(meio / total for meio, total in lados.values())
+        if pior >= AA_LADO:
+            achadas.append((nome, pior, primeiro))
+    if achadas:
+        nome, pior, (x, y) = achadas[0]
+        return Checagem("anti-alias", "alerta", f"{nome}: meio-tom em {pior:.0%}+ da borda nos 4 lados (máx {AA_LADO:.0%}"
+                        f"), a partir de ({x},{y}); anti-alias em volta da forma inteira vira borrão: deixe só no "
+                        "degrau longo que incomoda (guia fundamentos)", True)
+    if not conferidas:
+        return Checagem("anti-alias", "pulada", "nenhuma silhueta com borda nos 4 lados", True)
+    return Checagem("anti-alias", "ok", f"{conferidas} silhueta{'s' if conferidas > 1 else ''}, nenhuma com meio-tom em "
+                    f"{AA_LADO:.0%}+ da borda nos 4 lados", True)
+
+
+def _linha_iso(silhuetas: list[tuple[str, _Px, dict[tuple[int, int], int]]]) -> Checagem:
+    """Linha 2:1 é uma escada de degraus de 2; um degrau de 1 ou 3 no meio dela (2,1,2) quebra a linha."""
+    if not silhuetas:
+        return Checagem("linha 2:1", "pulada", "sem silhueta (passe camadas ou um sprite)", True)
+    linhas, quebras = 0, []
+    for nome, s, _ in silhuetas:
+        for perfil in _perfis(s):
+            trechos: list[list[Any]] = []  # [comprimento, distância, primeiro pixel], um por degrau
+            for _, h, pixel in perfil:
+                if trechos and trechos[-1][1] == h:
+                    trechos[-1][0] += 1
+                else:
+                    trechos.append([1, h, pixel])
+            i = 0
+            while i < len(trechos) - 1:
+                passo = trechos[i + 1][1] - trechos[i][1]
+                j = i + 1
+                while j + 1 < len(trechos) and trechos[j + 1][1] - trechos[j][1] == passo:
+                    j += 1
+                escada, meio = trechos[i:j + 1], trechos[i + 1:j]  # as pontas podem estar cortadas
+                if abs(passo) == 1 and len(meio) >= ISO_DEGRAUS and sum(t[0] == 2 for t in meio) >= ISO_DOIS * len(meio):
+                    linhas += 1
+                    quebras += [(nome, b[0], b[2]) for a, b, c in zip(escada, escada[1:], escada[2:])
+                                if a[0] == 2 == c[0] and b[0] != 2]
+                i = j
+    if not linhas:
+        return Checagem("linha 2:1", "ok", f"nenhuma linha 2:1 ({ISO_DEGRAUS}+ degraus de 2)", True)
+    if quebras:
+        nome, comprimento, (x, y) = quebras[0]
+        return Checagem("linha 2:1", "alerta", f"{len(quebras)} degrau{'s' if len(quebras) > 1 else ''} fora do 2 em "
+                        f"{linhas} linha{'s' if linhas > 1 else ''} 2:1, o primeiro de {comprimento} em {nome} ({x},{y}); "
+                        "o 2:1 é 2,2,2, nunca 2,1,2 (guia angulo)", True)
+    return Checagem("linha 2:1", "ok", f"{linhas} linha{'s' if linhas > 1 else ''} 2:1, nenhuma quebrada", True)
+
+
 # --- entrada -------------------------------------------------------------------------------------
 
 def revisar(
@@ -658,6 +824,7 @@ def revisar(
     silhuetas: list[tuple[str, _Px, dict[tuple[int, int], int]]] = []
     pares: list[tuple[str, list[tuple[int, int, float]]]] = []
     fundo_px = None
+    atras_de: dict[str, _Px] = {}  # o que está atrás de cada silhueta (anti-alias)
     for n, camada, atras in planos:
         f = _Px(camada)
         prof = _profundidade(f)
@@ -667,6 +834,7 @@ def revisar(
         if borda:
             pares.append((n, borda))
             silhuetas.append((n, f, prof))
+            atras_de[n] = atras_px
             fundo_px = atras_px  # o da última camada com borda: o fundo da frente
     alvo_px = _Px(alvo)
     if tipo == "sprite":
@@ -683,6 +851,10 @@ def revisar(
         _escala(cena),
         _repeticao(alvo),
         _laco([("composto", alvo)] + lidas, laco, marca),
+        _rampa_matiz(alvo, estilo),
+        _contorno_preto(silhuetas),
+        _anti_alias(silhuetas, atras_de),
+        _linha_iso(silhuetas),
     ]
     return Revisao(nome=nome, largura=alvo.width, altura=alvo.height, tipo=tipo, escala=escala,
                    camadas=[n for n, _ in lidas], checagens=checagens, imagem=alvo)
