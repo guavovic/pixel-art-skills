@@ -4,8 +4,10 @@
   "description": "Ateliê de pixel art para agentes de IA: técnica guardada no motor, arte saindo de receitas curtas.",
   "mcpServers": {
     "pixel-atelier": {
-      "command": "pixel-atelier",
+      "command": "python",
       "args": [
+        "-m",
+        "pixel_atelier",
         "mcp",
         "--raiz",
         "${workspacePath}"

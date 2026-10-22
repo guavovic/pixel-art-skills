@@ -1,8 +1,10 @@
 {
   "mcpServers": {
     "pixel-atelier": {
-      "command": "pixel-atelier",
+      "command": "python",
       "args": [
+        "-m",
+        "pixel_atelier",
         "mcp",
         "--raiz",
         "${CLAUDE_PROJECT_DIR}"

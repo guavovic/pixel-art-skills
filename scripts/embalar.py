@@ -4,7 +4,7 @@ Fonte (editada à mão):
     AGENTS.md                       seções "Por onde começar", "Fluxo de trabalho" e "Regras de arte"
     pixel_atelier/guia/             nomes dos capítulos
     pixel_atelier/servidor.py       ferramentas MCP (nome e docstring de cada uma)
-    pyproject.toml                  nome, versão, descrição e o comando do servidor
+    pyproject.toml                  nome, versão e descrição (o servidor sobe com `python -m <pacote>`)
 
 Saída (nunca editada à mão, sempre regenerada por este script):
     embalagens/claude-code/         plugin do Claude Code (.claude-plugin/plugin.json, .mcp.json, skill)
@@ -38,6 +38,14 @@ MARKETPLACE = ".claude-plugin/marketplace.json"
 REPO = "https://github.com/guavovic/pixel-atelier"
 AUTOR = {"name": "Gustavo Victor", "url": "https://github.com/guavovic"}
 INSTALAR = f'pip install "pixel-atelier[mcp] @ git+{REPO}"'
+# Interpretador que sobe o servidor (`python -m pixel_atelier mcp`), igual em todas as embalagens: nenhuma das
+# cinco ferramentas tem campo por sistema no servidor MCP, então vale o nome que existe em mais lugares.
+# `python` é o comando do Windows (o instalador do python.org e o venv do Windows não trazem python3; o
+# `python3` do gerenciador de instalação "não é recomendado", docs.python.org/3/using/windows.html) e, pela
+# PEP 394, "sempre disponível" dentro de um venv ativado em qualquer sistema. Os exemplos de servidor Python
+# do Gemini CLI, do VS Code e do Claude Code também usam `python`. Linux e macOS fora de venv (só python3):
+# o embalagens/README.md diz para trocar o comando.
+PYTHON = "python"
 DESCRICAO_SKILL = (
     "Pixel art por receita JSON curta com o servidor MCP pixel-atelier: cenário em camadas com laço, "
     "estilo tirado de uma imagem de referência e revisão das regras de pixel art em texto, sem abrir a imagem. "
@@ -63,12 +71,13 @@ def ler(caminho: Path) -> str:
 
 
 def projeto(raiz: Path) -> dict:
-    """Nome, versão, descrição e o comando do servidor, do pyproject.toml."""
+    """Nome, versão e descrição do pyproject.toml, e o pacote que `python -m` roda."""
     dados = tomllib.loads(ler(raiz / "pyproject.toml"))["project"]
-    comandos = dados.get("scripts", {})
-    if dados["name"] not in comandos:
-        raise ErroDeFonte(f"pyproject.toml sem o comando {dados['name']!r} em [project.scripts]")
-    return {"nome": dados["name"], "versao": dados["version"], "descricao": dados["description"]}
+    modulo = dados["name"].replace("-", "_")
+    if not (raiz / modulo / "__main__.py").is_file():
+        raise ErroDeFonte(f"{modulo}/__main__.py não existe; sem ele `python -m {modulo}` não sobe o servidor")
+    return {"nome": dados["name"], "versao": dados["version"], "descricao": dados["description"],
+            "modulo": modulo}
 
 
 def secoes_agents(raiz: Path) -> str:
@@ -129,7 +138,7 @@ def instrucoes(f: dict) -> str:
         f"# {f['nome']}\n\n"
         f"{f['descricao']}\n\n"
         "## Servidor MCP\n"
-        f"Esta embalagem registra o servidor `{f['nome']}` (`{f['nome']} mcp --raiz <pasta do projeto>`), "
+        f"Esta embalagem registra o servidor `{f['nome']}` (`{PYTHON} -m {f['modulo']} mcp --raiz <pasta do projeto>`), "
         "que só lê e grava dentro da raiz. Ele precisa estar instalado:\n\n"
         f"```\n{INSTALAR}\n```\n\n"
         "Ferramentas (toda resposta é texto, nenhuma devolve imagem):\n\n"
@@ -159,10 +168,14 @@ def markdown(texto: str, campos: dict | None = None) -> str:
     return (frontmatter(campos) + "\n" if campos else "") + f"<!-- {AVISO} -->\n\n" + texto
 
 
+def args_do_servidor(f: dict, raiz: str | None = None) -> list[str]:
+    """`-m pixel_atelier mcp [--raiz <variável da pasta do projeto>]`."""
+    return ["-m", f["modulo"], "mcp"] + (["--raiz", raiz] if raiz else [])
+
+
 def servidor_stdio(f: dict, raiz: str | None, **extra) -> dict:
-    """Entrada de servidor stdio: `pixel-atelier mcp [--raiz <variável da pasta do projeto>]`."""
-    args = ["mcp", "--raiz", raiz] if raiz else ["mcp"]
-    return {f["nome"]: {**extra, "command": f["nome"], "args": args}}
+    """Entrada de servidor stdio: `python -m pixel_atelier mcp [--raiz <pasta do projeto>]`."""
+    return {f["nome"]: {**extra, "command": PYTHON, "args": args_do_servidor(f, raiz)}}
 
 
 def skill(f: dict) -> str:
@@ -197,8 +210,8 @@ def codex(f: dict) -> dict[str, str]:
         "# Sem cwd, o Codex sobe o servidor na pasta da sessão (onde abriu, ou a de --cd), que vira a raiz;\n"
         "# para outra raiz, acrescente \"--raiz\", \"<pasta>\" em args.\n"
         f"[mcp_servers.{f['nome']}]\n"
-        f"command = {json.dumps(f['nome'])}\n"
-        'args = ["mcp"]\n'
+        f"command = {json.dumps(PYTHON)}\n"
+        f"args = {json.dumps(args_do_servidor(f))}\n"
     )
     return {
         f"{base}/.agents/skills/{f['nome']}/SKILL.md": skill(f),
@@ -257,7 +270,7 @@ Antes de qualquer uma, instale o servidor:
 | `cursor/` | Cursor | regra `.cursor/rules/{nome}.mdc`, aplicada quando o agente acha que o pedido pede, e servidor em `.cursor/mcp.json` | a pasta `.cursor/` na raiz do projeto, ou o servidor em `~/.cursor/mcp.json` |
 | `copilot/` | GitHub Copilot | `.github/copilot-instructions.md`, servidor do VS Code em `.vscode/mcp.json` e do Copilot CLI em `.github/mcp.json` | as duas pastas na raiz do repositório; se ele já tiver `copilot-instructions.md` ou `.github/mcp.json`, junte ao que existe |
 
-O comando `{nome}` precisa estar no PATH de quem abre a ferramenta, porque é ela que sobe o servidor. No Windows, venv sem ativar ou `pip install --user` deixam o comando fora: abra a ferramenta com o venv ativado, instale com `pipx`, ou troque `command` no arquivo de MCP pelo caminho absoluto do executável (`...\\Scripts\\{nome}.exe`).
+Toda embalagem sobe o servidor com `{python} -m {modulo} mcp`, sem depender do comando `{nome}` no PATH. É a ferramenta que roda esse `{python}`, com o PATH dela, então ele precisa ser o do ambiente onde o pacote foi instalado: instale fora de venv, abra a ferramenta com o venv ativado, ou troque `command` no arquivo de MCP pelo caminho absoluto do interpretador (`...\\.venv\\Scripts\\python.exe` no Windows, `.../.venv/bin/python` no Linux e no macOS). `{python}` é o nome que o Windows e todo venv ativado têm; num Linux ou macOS fora de venv, onde só existe `python3`, troque por `python3`. Com `pipx` o pacote fica num ambiente à parte que o `{python}` não vê: nesse caso use `"command": "{nome}"` e tire `-m` e `{modulo}` de `args`.
 
 O servidor recebe a pasta do projeto pela variável de cada ferramenta (`${{CLAUDE_PROJECT_DIR}}`, `${{workspacePath}}`, `${{workspaceFolder}}`). O Codex e o Copilot CLI não documentam variável de pasta: neles o servidor sobe sem `--raiz` e usa a pasta em que a ferramenta o abre (no Codex, a pasta da sessão, conferido no código do Codex).
 
@@ -274,7 +287,8 @@ def montar(raiz: Path = RAIZ) -> dict[str, str]:
     arquivos: dict[str, str] = {}
     for embalagem in (claude_code, codex, gemini, cursor, copilot):
         arquivos.update(embalagem(f))
-    arquivos[f"{SAIDA}/README.md"] = LEIAME.format(aviso=AVISO, instalar=INSTALAR, nome=f["nome"])
+    arquivos[f"{SAIDA}/README.md"] = LEIAME.format(aviso=AVISO, instalar=INSTALAR, nome=f["nome"], python=PYTHON,
+                                                   modulo=f["modulo"])
     return arquivos
 
 

@@ -85,7 +85,7 @@ Toda forma tem a mesma assinatura: `forma(estilo, largura, altura, *, seed=0, pr
 
 ```
 pip install "pixel-atelier[mcp] @ git+https://github.com/guavovic/pixel-atelier"
-pixel-atelier mcp --raiz caminho/do/projeto   # ou python -m pixel_atelier mcp
+python -m pixel_atelier mcp --raiz caminho/do/projeto   # ou o comando pixel-atelier mcp, se estiver no PATH
 ```
 
 | Ferramenta | O que faz |
@@ -108,14 +108,14 @@ Configuração num cliente MCP genérico (o formato `mcpServers` que a maioria a
 {
   "mcpServers": {
     "pixel-atelier": {
-      "command": "pixel-atelier",
-      "args": ["mcp", "--raiz", "/caminho/do/projeto"]
+      "command": "python",
+      "args": ["-m", "pixel_atelier", "mcp", "--raiz", "/caminho/do/projeto"]
     }
   }
 }
 ```
 
-O comando `pixel-atelier` precisa estar no PATH de quem abre a ferramenta (o cliente MCP sobe o servidor com o PATH dele). No Windows, venv sem ativar ou `pip install --user` costumam deixar o comando fora: abra a ferramenta com o venv ativado, instale com `pipx`, ou ponha em `command` o caminho absoluto do executável (`C:\caminho\.venv\Scripts\pixel-atelier.exe`, com as barras dobradas no JSON). Outra saída é `"command": "python"` com `"args": ["-m", "pixel_atelier", "mcp", "--raiz", "..."]`, com o `python` do ambiente onde o pacote está.
+O cliente MCP sobe o servidor com o PATH dele, então o `python` que ele acha precisa ser o do ambiente onde o pacote está instalado: abra a ferramenta com o venv ativado, ou ponha em `command` o caminho absoluto do interpretador (`C:\caminho\.venv\Scripts\python.exe`, com as barras dobradas no JSON, ou `/caminho/.venv/bin/python`). Num Linux ou macOS sem venv, onde só existe `python3`, troque `python` por `python3`. Instalado com `pipx`, o pacote fica num ambiente à parte que o `python` não vê: use `"command": "pixel-atelier"` com `"args": ["mcp", ...]`.
 
 ## Revisão
 

@@ -52,9 +52,9 @@ def test_cada_embalagem_registra_o_servidor_e_leva_o_fluxo():
     }
     for caminho, pegar in servidores.items():
         servidor = pegar(json.loads(arquivos[caminho]))["pixel-atelier"]
-        assert servidor["command"] == "pixel-atelier" and servidor["args"][0] == "mcp", caminho
+        assert servidor["command"] == "python" and servidor["args"][:3] == ["-m", "pixel_atelier", "mcp"], caminho
     codex = tomllib.loads(arquivos["embalagens/codex/.codex/config.toml"])
-    assert codex["mcp_servers"]["pixel-atelier"] == {"command": "pixel-atelier", "args": ["mcp"]}
+    assert codex["mcp_servers"]["pixel-atelier"] == {"command": "python", "args": ["-m", "pixel_atelier", "mcp"]}
 
     texto = {"embalagens/claude-code/skills/pixel-atelier/SKILL.md", "embalagens/codex/.agents/skills/pixel-atelier/SKILL.md",
              "embalagens/gemini/GEMINI.md", "embalagens/cursor/.cursor/rules/pixel-atelier.mdc",
@@ -86,8 +86,8 @@ def test_marketplace_aponta_para_o_plugin():
 
 
 def test_fonte_mudada_deixa_a_embalagem_desatualizada(tmp_path):
-    for parte in ("AGENTS.md", "pyproject.toml", "pixel_atelier/servidor.py", "pixel_atelier/guia",
-                  "embalagens", ".claude-plugin"):
+    for parte in ("AGENTS.md", "pyproject.toml", "pixel_atelier/servidor.py", "pixel_atelier/__main__.py",
+                  "pixel_atelier/guia", "embalagens", ".claude-plugin"):
         origem, destino = RAIZ / parte, tmp_path / parte
         destino.parent.mkdir(parents=True, exist_ok=True)
         (shutil.copytree if origem.is_dir() else shutil.copy)(origem, destino)
@@ -102,10 +102,13 @@ def test_fonte_mudada_deixa_a_embalagem_desatualizada(tmp_path):
 
 
 def test_fonte_sem_secao_para_o_script(tmp_path):
-    for parte in ("pyproject.toml", "pixel_atelier/servidor.py", "pixel_atelier/guia"):
+    for parte in ("pyproject.toml", "pixel_atelier/servidor.py", "pixel_atelier/__main__.py", "pixel_atelier/guia"):
         origem, destino = RAIZ / parte, tmp_path / parte
         destino.parent.mkdir(parents=True, exist_ok=True)
         (shutil.copytree if origem.is_dir() else shutil.copy)(origem, destino)
     (tmp_path / "AGENTS.md").write_text("# AGENTS.md\n\n## Por onde começar\nnada\n", encoding="utf-8")
     with pytest.raises(embalar.ErroDeFonte, match="Fluxo de trabalho"):
+        embalar.montar(tmp_path)
+    (tmp_path / "pixel_atelier" / "__main__.py").unlink()  # sem ele, python -m pixel_atelier não sobe
+    with pytest.raises(embalar.ErroDeFonte, match="__main__.py"):
         embalar.montar(tmp_path)

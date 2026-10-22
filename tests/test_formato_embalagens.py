@@ -26,6 +26,7 @@ _spec.loader.exec_module(embalar)
 
 ARQUIVOS = embalar.montar()
 NOME = tomllib.loads((RAIZ / "pyproject.toml").read_text(encoding="utf-8"))["project"]["name"]
+MODULO = NOME.replace("-", "_")
 
 
 def json_de(caminho: str) -> dict:
@@ -63,13 +64,15 @@ def variaveis(valor) -> set[str]:
 
 def confere_servidor_stdio(servidor: dict, aceitas: set[str], obrigatorias: set[str], onde: str) -> None:
     """Regras comuns: chaves conhecidas, `command` sem argumento dentro, `args` lista de strings,
-    e o comando é o do pacote com o subcomando `mcp` (e `--raiz <pasta>` quando a ferramenta passa a pasta)."""
+    e o servidor sobe por `python -m <pacote> mcp` (e `--raiz <pasta>` quando a ferramenta passa a pasta), sem
+    depender do comando do pacote no PATH (issue #23)."""
     assert set(servidor) <= aceitas, f"{onde}: chaves desconhecidas {set(servidor) - aceitas}"
     assert obrigatorias <= set(servidor), f"{onde}: faltam {obrigatorias - set(servidor)}"
     assert isinstance(servidor["command"], str) and " " not in servidor["command"], onde
     assert isinstance(servidor["args"], list) and all(isinstance(a, str) for a in servidor["args"]), onde
-    assert servidor["command"] == NOME and servidor["args"][0] == "mcp", onde
-    assert servidor["args"][1:] in ([], ["--raiz", servidor["args"][-1]]), onde
+    assert servidor["command"] == "python" and servidor["args"][:3] == ["-m", MODULO, "mcp"], onde
+    assert servidor["args"][3:] in ([], ["--raiz", servidor["args"][-1]]), onde
+    assert (RAIZ / MODULO / "__main__.py").is_file(), "sem __main__.py o python -m não sobe o servidor"
 
 
 # ---------------------------------------------------------------- Agent Skills (Claude Code e Codex)
@@ -136,7 +139,7 @@ def test_claude_code_mcp_json():
     confere_servidor_stdio(servidor, {"type", "command", "args", "env"}, {"command", "args"}, ".mcp.json")
     usadas = variaveis(servidor)
     assert usadas <= {"CLAUDE_PLUGIN_ROOT", "CLAUDE_PLUGIN_DATA", "CLAUDE_PROJECT_DIR"}, usadas
-    assert servidor["args"] == ["mcp", "--raiz", "${CLAUDE_PROJECT_DIR}"]
+    assert servidor["args"][3:] == ["--raiz", "${CLAUDE_PROJECT_DIR}"]
 
 
 def test_claude_code_marketplace_json():
@@ -179,7 +182,7 @@ def test_codex_config_toml():
     servidor = config["mcp_servers"][NOME]
     confere_servidor_stdio(servidor, CHAVES_CODEX, {"command"}, "config.toml")
     assert not variaveis(servidor), "o Codex não documenta variável em config.toml"
-    assert "cwd" not in servidor and servidor["args"] == ["mcp"], "sem cwd e sem --raiz: raiz = pasta da sessão"
+    assert "cwd" not in servidor and "--raiz" not in servidor["args"], "sem cwd e sem --raiz: raiz = pasta da sessão"
 
 
 def test_codex_skill_onde_o_codex_procura():
@@ -213,7 +216,7 @@ def test_gemini_extension_json():
     servidor = manifesto["mcpServers"][NOME]
     confere_servidor_stdio(servidor, CHAVES_SERVIDOR_GEMINI, {"command", "args"}, "gemini-extension.json")
     assert variaveis(servidor) <= {"extensionPath", "workspacePath", "/", "pathSeparator"}
-    assert servidor["args"] == ["mcp", "--raiz", "${workspacePath}"]
+    assert servidor["args"][3:] == ["--raiz", "${workspacePath}"]
     contexto = manifesto["contextFileName"]
     assert f"{base}/{contexto}" in ARQUIVOS and ARQUIVOS[f"{base}/{contexto}"].strip()
 
@@ -242,7 +245,7 @@ def test_cursor_mcp_json():
     assert servidor["type"] == "stdio"
     usadas = {v for v in variaveis(servidor) if not v.startswith("env:")}
     assert usadas <= {"userHome", "workspaceFolder", "workspaceFolderBasename", "pathSeparator", "/"}, usadas
-    assert servidor["args"] == ["mcp", "--raiz", "${workspaceFolder}"]
+    assert servidor["args"][3:] == ["--raiz", "${workspaceFolder}"]
 
 
 # ---------------------------------------------------------------- GitHub Copilot
@@ -275,7 +278,7 @@ def test_copilot_vscode_mcp_json():
     assert servidor["type"] == "stdio"
     usadas = {v for v in variaveis(servidor) if not v.startswith(("env:", "input:"))}
     assert usadas <= VARIAVEIS_VSCODE, usadas
-    assert servidor["args"] == ["mcp", "--raiz", "${workspaceFolder}"]
+    assert servidor["args"][3:] == ["--raiz", "${workspaceFolder}"]
 
 
 def test_copilot_cli_mcp_json():

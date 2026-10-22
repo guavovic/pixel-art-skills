@@ -10,7 +10,7 @@ description: "Pixel art por receita JSON curta com o servidor MCP pixel-atelier:
 Ateliê de pixel art para agentes de IA: técnica guardada no motor, arte saindo de receitas curtas.
 
 ## Servidor MCP
-Esta embalagem registra o servidor `pixel-atelier` (`pixel-atelier mcp --raiz <pasta do projeto>`), que só lê e grava dentro da raiz. Ele precisa estar instalado:
+Esta embalagem registra o servidor `pixel-atelier` (`python -m pixel_atelier mcp --raiz <pasta do projeto>`), que só lê e grava dentro da raiz. Ele precisa estar instalado:
 
 ```
 pip install "pixel-atelier[mcp] @ git+https://github.com/guavovic/pixel-atelier"
