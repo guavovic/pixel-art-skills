@@ -99,7 +99,8 @@ class Tela:
 
     def pontilhar(self, densidade: Callable[[int, int], float], escala: int = 1) -> Image.Image:
         """Máscara pontilhada com `densidade(x, y)` em coordenadas do mundo (o limiar de Bayer é o da tela)."""
-        return mascara_pontilhada(self.largura, self.altura, lambda x, y: densidade(self.no_mundo(x), y), escala)
+        mundo = [self.no_mundo(x) for x in range(self.largura)]
+        return mascara_pontilhada(self.largura, self.altura, lambda x, y: densidade(mundo[x], y), escala)
 
     # --- operações de máscara ----------------------------------------------------------------
 

@@ -38,7 +38,15 @@ def nevoa(
     ruido_b = ruido_periodico(semente(seed, 12), largura, 8, queda=0.3)
     y_centro, meia = centro * altura, max(1.0, espessura * altura)
 
+    calculado: dict[tuple[int, int], float] = {}  # a névoa densa pede o mesmo campo da leve
+
     def campo(x: int, y: int) -> float:
+        v = calculado.get((x, y))
+        if v is None:
+            v = calculado[(x, y)] = _campo(x, y)
+        return v
+
+    def _campo(x: int, y: int) -> float:
         distancia = (y - y_centro) / meia
         if ate_o_chao and distancia > 0:
             distancia = 0.0

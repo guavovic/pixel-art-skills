@@ -139,7 +139,7 @@ def _gravar(resultado: Resultado, pasta: Path) -> None:
         resultado.arquivos.append(destino)
         if r.ampliar > 1:
             destino = pasta / f"{r.cena}-{r.ampliar}x.png"
-            gravar_png(ampliar(resultado.composto, r.ampliar), destino, r.laco)
+            gravar_png(ampliar(resultado.composto, r.ampliar), destino, r.laco, escala=r.ampliar)
             resultado.arquivos.append(destino)
     if r.saida in ("tudo", "camadas"):
         (pasta / r.cena).mkdir(exist_ok=True)

@@ -22,7 +22,7 @@ Todo pixel da tela tem o mesmo tamanho. Pixel de tamanho diferente no mesmo quad
 
 ## Revisar
 - `revisar` mede o bloco de pixel em ladrilhos de **16x16** (`LADRILHO`) e dá alerta quando **2 ou mais** ladrilhos (`LADRILHOS_FORA`) têm bloco diferente do resto (heurística). 16 é o ladrilho padrão; 2 evita alerta por um único ladrilho chapado que engana a medida.
-- Imagem ampliada (`-3x.png`) é revisada no tamanho real, sozinha.
+- Imagem ampliada (`-3x.png`) é revisada no tamanho real, sozinha. O ampliado do `gerar` leva a escala gravada no PNG; sem marca nem `-Nx` no nome, arte chapada (faixas, retângulos de lado par) não passa por ampliada: o bloco precisa de troca de cor nos dois eixos, todas no passo dele.
 
 ## Como pedir
 - `"tamanho": [320, 180]` e `"ampliar": 4` na receita. Posições e tamanhos das formas são frações da altura, então a mesma receita serve em qualquer resolução; com laço, largura múltipla de 8.

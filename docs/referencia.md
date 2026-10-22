@@ -129,6 +129,8 @@ python -m pixel_atelier revisar saida/vale.png --laco                    # forç
 
 O laço se confere sozinho: o `gerar` grava em cada PNG (composto, ampliado e camadas) um texto `pixel-atelier:laco` com `sim` ou `nao`, e o `revisar` confere a emenda quando a marca diz `sim`. `--laco` força a conferência numa imagem sem a marca (salva de novo por outro programa, por exemplo, que costuma descartar o texto do PNG); `laco=False` em Python, ou `false` na ferramenta MCP, pula.
 
+O ampliado também leva `pixel-atelier:escala` (o N do `ampliar`), e o `revisar` volta ao tamanho real por ela ou pelo `-Nx` do nome, em qualquer tamanho. Sem nenhuma das duas, a imagem só passa por ampliada com troca de cor nos dois eixos, todas no passo do bloco, e trocas bastantes para não ser acaso (arte chapada, com poucas trocas, é lida como veio).
+
 A receita `vale` acima, depois de `gerar`:
 
 ```
@@ -166,7 +168,7 @@ Com problema, a linha diz o quanto e onde, por exemplo `alerta legibilidade: fre
 | anti-alias | meio-tom (alfa parcial, ou valor entre o de dentro e o de trás) em 80%+ da borda em cada um dos 4 lados |
 | linha 2:1 | degrau de 1 ou 3 entre dois de 2 numa linha 2:1 (6+ degraus, 85%+ deles de 2) |
 
-Valor é a luminância (o teste em escala de cinza). A visão (lateral, 3/4, isométrica) e o tempo de animação não são conferidos: dependem do que a imagem quer ser, e ficam para a aprovação final. Contraste, legibilidade e silhuetas precisam das camadas (a pasta que `gerar` grava, achada sozinha, ou `--camadas`) ou de um `--fundo`; sem elas a regra sai como `pulada`. Imagem ampliada (`-3x.png`) é revisada no tamanho real. As regras marcadas `[heurística]` são aproximações: confira na aprovação final. Névoa e raios em pontilhado ficam fora do contraste, porque são transparentes de propósito. Os limiares ficam no topo de `revisao.py`; o porquê de cada número está no capítulo da regra no guia.
+Valor é a luminância (o teste em escala de cinza). A visão (lateral, 3/4, isométrica) e o tempo de animação não são conferidos: dependem do que a imagem quer ser, e ficam para a aprovação final. Contraste, legibilidade e silhuetas pedem as camadas (a pasta que `gerar` grava, achada sozinha, ou `--camadas`) ou um `--fundo`. Sem eles, numa cena opaca, o `revisar` separa as silhuetas pelo próprio composto (cores que se tocam muito e são parecidas ficam na mesma silhueta) e mede contraste (a mediana da borda entre elas, mín 0,05) e legibilidade (a borda das que chegam no pé da imagem, as da frente), marcados `[heurística]`; duas camadas com cores quase iguais viram uma silhueta só, então ali o composto não acusa. Pillow shading e serrilhado continuam `pulada` sem camadas: no composto a silhueta se corta na que está na frente. Imagem ampliada (`-3x.png`) é revisada no tamanho real. As regras marcadas `[heurística]` são aproximações: confira na aprovação final. Névoa e raios em pontilhado ficam fora do contraste, porque são transparentes de propósito. Os limiares ficam no topo de `revisao.py`; o porquê de cada número está no capítulo da regra no guia.
 
 ## Estilo por referência
 

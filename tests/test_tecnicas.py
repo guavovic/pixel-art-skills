@@ -27,7 +27,8 @@ from pixel_atelier import (
     ruido_periodico,
     salvar_estilo,
 )
-from pixel_atelier.cor import luminancia
+from pixel_atelier.cor import QUASE_IGUAL, distancia2, luminancia
+from pixel_atelier.pintura import limpar_soltos
 
 
 def test_hex_ida_e_volta():
@@ -163,6 +164,40 @@ def test_estilo_com_rampa_gerada_e_papel_que_falta():
     assert len(estilo.rampas["pedra"]) == 4
     assert estilo.rampa("folha") == estilo.rampa("pedra")  # sem folha, usa a reserva
     assert set(estilo.rampa("pedra", 0.8)) <= set(estilo.paleta)
+
+
+def pares_quase_iguais(paleta) -> list:
+    return [(a, b) for i, a in enumerate(paleta) for b in paleta[i + 1:] if distancia2(a, b) < QUASE_IGUAL ** 2]
+
+
+@pytest.mark.parametrize("nome", ["snes-diurno", "metroidvania-noturno"])
+def test_paleta_tirada_das_rampas_sem_par_quase_igual(nome):
+    """A mistura com a atmosfera caía a 1 ou 2 de outra cor; agora a paleta fica só com a primeira."""
+    estilo = carregar_estilo(nome)
+    assert "paleta" not in estilo.origem and not pares_quase_iguais(estilo.paleta)
+    for papel in estilo.rampas:  # a rampa continua inteira na paleta, em qualquer profundidade
+        assert set(estilo.rampa(papel, 0.6)) <= set(estilo.paleta)
+
+
+def test_paleta_fechada_a_mao_fica_como_veio():
+    estilo = Estilo.de_dicionario({"nome": "teste", "ceu": ["#101010"], "atmosfera": "#101010", "luz": "#f0f0f0",
+                                   "rampas": {"pedra": ["#101010", "#808080"]},
+                                   "paleta": ["#101010", "#111111", "#808080", "#f0f0f0"]})
+    assert len(estilo.paleta) == 4 and len(pares_quase_iguais(estilo.paleta)) == 1
+
+
+def test_limpar_soltos_tira_ilha_e_fecha_furo():
+    cheio, outro, vazio = (90, 90, 90, 255), (200, 40, 40, 255), (0, 0, 0, 0)
+    imagem = Image.new("RGBA", (8, 6), vazio)
+    imagem.paste(cheio, (3, 0, 8, 6))
+    imagem.putpixel((1, 2), outro)  # ilhado no vazio: some
+    imagem.putpixel((5, 3), vazio)  # furo de 1 pixel: fecha
+    imagem.putpixel((0, 4), cheio)  # com laço o vizinho da esquerda é a última coluna (cheia)
+    limpa = limpar_soltos(imagem, laco=True)
+    assert limpa.getpixel((1, 2)) == vazio and limpa.getpixel((5, 3)) == cheio
+    assert limpa.getpixel((0, 4)) == cheio  # dois vizinhos cheios e dois vazios: não é solto
+    sem_laco = limpar_soltos(imagem, laco=False)
+    assert sem_laco.getpixel((0, 4)) == cheio  # fora da borda conta como ele mesmo
 
 
 def test_estilo_invalido():

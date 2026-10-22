@@ -34,15 +34,16 @@ def mascara_pontilhada(
 
     `escala=2` deixa o pontilhado com pontos de 2x2, mais pesado; para névoa leve use 1.
     """
-    mascara = Image.new("L", (largura, altura), 0)
-    px = mascara.load()
+    dados = bytearray(largura * altura)
     for y in range(altura):
         linha = BAYER4[(y // escala) & 3]
-        for x in range(largura):
+        limiares = [(linha[(x // escala) & 3] + 0.5) / 16.0 for x in range(largura)]
+        inicio = y * largura
+        for x, limite in enumerate(limiares):
             d = densidade(x, y)
-            if d > 0 and d > (linha[(x // escala) & 3] + 0.5) / 16.0:
-                px[x, y] = 255
-    return mascara
+            if d > 0 and d > limite:
+                dados[inicio + x] = 255
+    return Image.frombytes("L", (largura, altura), bytes(dados))
 
 
 def escolher_no_degrade(cores: Sequence[RGB], valor: float, x: int, y: int) -> RGB:

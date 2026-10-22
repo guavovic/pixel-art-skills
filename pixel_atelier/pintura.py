@@ -18,6 +18,7 @@ from PIL import Image, ImageChops
 
 from .cor import RGB, misturar, quantizar
 from .estilo import Estilo
+from .imagem import iguais, vizinho
 from .pontilhado import xadrez
 from .tela import Peca, Tela
 
@@ -57,14 +58,16 @@ def pintar(tela: Tela, pecas: Iterable[Peca], estilo: Estilo, profundidade: floa
     cor_luz = estilo.cor_da_luz(profundidade)
     uniao = tela.nova_mascara()
 
+    margem = 2 * faixa + 3  # alcance das faixas e da abertura morfológica, com folga
     for peca in pecas:
-        m = peca.mascara
-        if m.getbbox() is None:
+        caixa = _caixa(peca.mascara, margem, tela)
+        if caixa is None:
             continue
-        uniao = ImageChops.lighter(uniao, m)
+        uniao = ImageChops.lighter(uniao, peca.mascara)
+        m = peca.mascara.crop(caixa)  # as contas valem só perto da peça: bem mais rápido que a tela toda
         rampa = estilo.rampa(peca.papel, profundidade)
         i = _indice(estilo, rampa, peca.tom)
-        imagem.paste(rampa[i] + (255,), mask=m)
+        imagem.paste(rampa[i] + (255,), caixa, mask=m)
         if peca.liso:
             continue
         if estilo.sombreamento in ("faixas", "pontilhado"):
@@ -72,19 +75,20 @@ def pintar(tela: Tela, pecas: Iterable[Peca], estilo: Estilo, profundidade: floa
             banda_sombra = tela.faixa(m, sombra, faixa)
             banda_luz = tela.faixa(m, luz, faixa)
             if tabuleiro is not None:
-                sombra2 = ImageChops.multiply(ImageChops.subtract(tela.faixa(m, sombra, faixa * 2), banda_sombra), tabuleiro)
-                luz2 = ImageChops.multiply(ImageChops.subtract(tela.faixa(m, luz, faixa * 2), banda_luz), tabuleiro)
-                imagem.paste(escura + (255,), mask=sombra2)
-                imagem.paste(clara + (255,), mask=luz2)
-            imagem.paste(escura + (255,), mask=banda_sombra)
-            imagem.paste(clara + (255,), mask=banda_luz)
+                casas = tabuleiro.crop(caixa)
+                sombra2 = ImageChops.multiply(ImageChops.subtract(tela.faixa(m, sombra, faixa * 2), banda_sombra), casas)
+                luz2 = ImageChops.multiply(ImageChops.subtract(tela.faixa(m, luz, faixa * 2), banda_luz), casas)
+                imagem.paste(escura + (255,), caixa, mask=sombra2)
+                imagem.paste(clara + (255,), caixa, mask=luz2)
+            imagem.paste(escura + (255,), caixa, mask=banda_sombra)
+            imagem.paste(clara + (255,), caixa, mask=banda_luz)
             topo = clara
         else:
             topo = rampa[i]
         if estilo.luz_contorno:
             borda = ImageChops.multiply(tela.faixa(m, luz, 1), tela.partes_grossas(m))
             cor_borda = estilo.cor(misturar(topo, cor_luz, estilo.forca_luz))
-            imagem.paste(cor_borda + (255,), mask=borda)
+            imagem.paste(cor_borda + (255,), caixa, mask=borda)
 
     if estilo.contorno and uniao.getbbox() is not None:
         anel = ImageChops.subtract(tela.dilatar(uniao, cruz=True), uniao)
@@ -95,34 +99,40 @@ def pintar(tela: Tela, pecas: Iterable[Peca], estilo: Estilo, profundidade: floa
     return quantizar(imagem, estilo.paleta)
 
 
+def _caixa(mascara: Image.Image, margem: int, tela: Tela) -> tuple[int, int, int, int] | None:
+    """Recorte da tela onde a peça e as contas em volta dela cabem; None se a máscara está vazia.
+
+    Na vertical o recorte para na borda da tela, que prende do mesmo jeito. Na horizontal, se a
+    margem passa da borda, vale a largura toda: assim o laço dá a volta igual à tela inteira.
+    """
+    caixa = mascara.getbbox()
+    if caixa is None:
+        return None
+    x0, y0, x1, y1 = caixa
+    if x0 - margem < 0 or x1 + margem > tela.largura:
+        x0, x1 = 0, tela.largura
+    else:
+        x0, x1 = x0 - margem, x1 + margem
+    return (x0, max(0, y0 - margem), x1, min(tela.altura, y1 + margem))
+
+
 def limpar_soltos(imagem: Image.Image, laco: bool = True) -> Image.Image:
     """Tira pixel solto: o que tem os 4 vizinhos de uma mesma cor diferente da dele vira essa cor.
 
-    Vale para pixel opaco ilhado no vazio (some) e para furo de 1 pixel (fecha).
+    Vale para pixel opaco ilhado no vazio (some) e para furo de 1 pixel (fecha). Fora da imagem
+    conta como o próprio pixel, salvo na horizontal com `laco`, que dá a volta.
     """
-    largura, altura = imagem.size
-    fonte = imagem.load()
-    saida = imagem.copy()
-    px = saida.load()
-    for y in range(altura):
-        for x in range(largura):
-            atual = fonte[x, y]
-            vizinhos = []
-            for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
-                nx, ny = x + dx, y + dy
-                if laco:
-                    nx %= largura
-                elif not 0 <= nx < largura:
-                    nx = x
-                if not 0 <= ny < altura:
-                    ny = y
-                vizinhos.append(fonte[nx, ny])
-            primeiro = vizinhos[0]
-            if primeiro != atual and all(v == primeiro for v in vizinhos[1:]):
-                if primeiro[3] == 0 and atual[3] == 0:
-                    continue
-                px[x, y] = primeiro if primeiro[3] else (0, 0, 0, 0)
-    return saida
+    direita, esquerda, baixo, cima = (vizinho(imagem, dx, dy, laco) for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)))
+    solto = iguais(direita, esquerda)
+    for outro in (baixo, cima):
+        solto = ImageChops.multiply(solto, iguais(direita, outro))
+    solto = ImageChops.subtract(solto, iguais(direita, imagem))  # vizinhos iguais entre si, mas não a ele
+    alfa_vizinho = direita.getchannel("A")
+    algum_cheio = ImageChops.lighter(alfa_vizinho, imagem.getchannel("A")).point(lambda v: 255 if v else 0)
+    solto = ImageChops.multiply(solto, algum_cheio)  # vazio cercado de vazio fica como está
+    vazio = Image.new(imagem.mode, imagem.size, (0, 0, 0, 0))
+    nova = Image.composite(direita, vazio, alfa_vizinho.point(lambda v: 255 if v else 0))
+    return Image.composite(nova, imagem, solto)
 
 
 def luz_de_contorno(

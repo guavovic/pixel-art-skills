@@ -34,6 +34,6 @@ Cena de jogo em camadas: o fundo dá o clima, a camada da ação precisa ler em 
 - Camadas do fundo para a frente; `profundidade` de 1 (longe) a 0 (perto) puxa as cores para a atmosfera do estilo.
 - Separação entre camadas: afaste as `profundidade` de camadas vizinhas (0,85 e 0,65 já é pouco no noturno; 0,95 e 0,65 separa) ou troque o `papel` de uma delas.
 - Variação: `seed` por camada, `espaco`, `tamanho`, `quantidade`.
-- Conferir: `revisar cena.png` lê as camadas da pasta `<cena>/` e diz qual camada tem o contraste mais baixo.
+- Conferir: `revisar cena.png` lê as camadas da pasta `<cena>/` e diz qual camada tem o contraste mais baixo. Sem a pasta, o contraste sai das silhuetas que o `revisar` separa no composto: mais fraco (camadas de cores quase iguais viram uma só), então para a cena final grave as camadas (`"saida": "tudo"`).
 
 Fontes: Raymond Schlitter, "Pixelblog 11: Landscape Pixeling" e "Pixelblog 23: Parallax Scrolling" (slynyrd.com/pixelblog-catalogue); tutoriais de Pedro Medeiros, "Parallax" (saint11.art/blog/pixel-art-tutorials).

@@ -9,6 +9,7 @@ from PIL import Image
 
 from pixel_atelier import Checagem, ampliar, carregar_estilo, compor, gerar, revisar
 from pixel_atelier.__main__ import main
+from pixel_atelier.imagem import escala_inteira, gravar_png
 from pixel_atelier.revisao import CONTRASTE_FRENTE, DICA_CONTRASTE, _contraste, _medida
 
 VAZIO = (0, 0, 0, 0)
@@ -61,6 +62,11 @@ def test_cores_dentro_do_limite_e_acima_dele():
         muitas.paste(cinza(10 * i + 10), (i + 1, 1, i + 2, 5))
     c = regra(revisar(muitas), "cores")
     assert c.estado == "alerta" and c.detalhe.startswith("20 (limite 16)")  # sprite: limite 16
+
+    parecidas = poucas.copy()  # a paleta do motor já não tem par quase igual; imagem de fora ainda pode ter
+    parecidas.paste(cinza(22), (0, 0, 3, 8))
+    c = regra(revisar(parecidas), "cores")
+    assert c.estado == "ok" and "1 par quase igual (#141414~#161616)" in c.detalhe
 
 
 def test_cor_fora_da_paleta_do_estilo():
@@ -136,11 +142,44 @@ def test_sprite_sozinho_precisa_de_faixa_de_valor():
     assert c.detalhe.endswith("aumente o contraste de valor do sprite (luz, sombra e contorno mais separados)")
 
 
+def isoluminante(frente) -> Image.Image:
+    """Cena opaca sem camadas: céu vermelho e um morro que chega no pé, com o mesmo valor do céu ou não."""
+    cena = chapa(48, 48, (200, 60, 60, 255))  # valor 0,35
+    cena.paste(frente, (12, 20, 36, 48))
+    cena.paste(frente, (16, 16, 32, 20))
+    return cena
+
+
+def test_cena_sem_camadas_mede_contraste_pelo_composto():
+    verde_igual = (40, 108, 60, 255)  # outro matiz, quase o mesmo valor do vermelho: some no cinza
+    revisao = revisar(isoluminante(verde_igual))
+    assert not revisao.camadas
+    c = regra(revisao, "contraste")
+    assert c.estado == "alerta" and c.heuristica and c.detalhe.startswith("pelo composto, sem camadas: 2 silhuetas")
+    c = regra(revisao, "legibilidade")
+    assert c.estado == "alerta" and "silhuetas da frente" in c.detalhe and "some em 100%" in c.detalhe
+    assert c.detalhe.endswith(DICA_CONTRASTE)
+
+    revisao = revisar(isoluminante((20, 70, 30, 255)))  # verde escuro: o valor separa
+    assert regra(revisao, "contraste").estado == "ok" and regra(revisao, "legibilidade").estado == "ok"
+
+
+def test_pillow_com_alfa_parcial_sem_pixel_vazio():
+    """#35: sprite todo meio transparente não tem borda; a regra pula em vez de quebrar."""
+    c = regra(revisar(chapa(12, 12, (90, 90, 90, 128))), "pillow shading")
+    assert c.estado == "pulada"
+
+
 def test_cena_sem_camadas_pula_o_que_precisa_delas():
-    revisao = revisar(faixas(32, 32, [50, 150]))
-    assert {c.regra for c in revisao.checagens if c.estado == "pulada"} == {
-        "contraste", "legibilidade", "pillow shading", "serrilhado", "escala", "laço", "matiz da rampa",
-        "contorno preto", "anti-alias", "linha 2:1"}  # escala: chapado demais
+    lisa = revisar(chapa(32, 32, cinza(90)))  # uma cor só: nada para separar
+    assert {c.regra for c in lisa.checagens if c.estado == "pulada"} >= {
+        "contraste", "legibilidade", "pillow shading", "serrilhado", "escala", "laço"}
+    revisao = revisar(faixas(32, 32, [50, 150]))  # duas faixas: o composto separa, mas nada é fechado
+    assert regra(revisao, "contraste").estado == "ok"
+    for nome in ("pillow shading", "serrilhado"):  # a forma só se mede com as camadas
+        c = regra(revisao, nome)
+        assert c.estado == "pulada" and "se corta nas outras" in c.detalhe
+    assert regra(revisao, "escala").estado == "pulada"  # chapado demais
 
 
 # --- laço ----------------------------------------------------------------------------------------
@@ -349,6 +388,39 @@ def test_escala_mista_e_imagem_ampliada():
     revisao = revisar(ampliar(cena, 3))
     assert revisao.escala == 3 and (revisao.largura, revisao.altura) == (64, 64)
     assert "ampliada 3x" in revisao.resumo().splitlines()[0]
+
+
+def test_arte_chapada_nao_passa_por_ampliada():
+    """Faixas de céu de altura par e um retângulo: tudo cai no passo 2 por acaso, mas é tamanho real."""
+    chapada = chapa(64, 64, cinza(200))
+    y = 0
+    for i, altura in enumerate((4, 6, 8, 10, 6, 4)):
+        chapada.paste(cinza(60 + 20 * i), (0, y, 64, y + altura))
+        y += altura
+    chapada.paste(cinza(30), (20, 30, 44, 64))
+    assert escala_inteira(chapada) == 1
+    assert revisar(chapada).escala == 1
+
+
+def test_ampliada_pequena_pela_marca_ou_pelo_nome(tmp_path):
+    sprite = ruido(10, 6, seed=4)  # menor que 16 pixels por lado: sem marca não dá para ter certeza
+    grande = ampliar(sprite, 4)
+    gravar_png(grande, tmp_path / "heroi.png", laco=False, escala=4)
+    grande.save(tmp_path / "heroi-4x.png")
+    for arquivo in ("heroi.png", "heroi-4x.png"):
+        revisao = revisar(tmp_path / arquivo)
+        assert revisao.escala == 4 and (revisao.largura, revisao.altura) == (10, 6), arquivo
+    # marca que não bate com os blocos não vale: a imagem é revisada como veio
+    gravar_png(sprite, tmp_path / "errada.png", laco=False, escala=3)
+    assert revisar(tmp_path / "errada.png").escala == 1
+
+
+def test_gerar_marca_a_escala_do_ampliado(tmp_path):
+    receita = {"cena": "mini", "tamanho": [16, 12], "estilo": "snes-diurno", "ampliar": 3, "laco": False,
+               "camadas": [{"forma": "ceu"}, {"forma": "rocha", "quantidade": 1, "tamanho": [0.6, 0.8]}]}
+    gerar(receita, pasta=tmp_path)
+    revisao = revisar(tmp_path / "mini-3x.png")
+    assert revisao.escala == 3 and (revisao.largura, revisao.altura) == (16, 12)
 
 
 # --- composição repetida -------------------------------------------------------------------------
