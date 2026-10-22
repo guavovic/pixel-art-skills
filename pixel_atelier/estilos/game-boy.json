@@ -1,0 +1,28 @@
+{
+  "nome": "game-boy",
+  "descricao": "Quatro tons de verde do portátil clássico: contorno escuro, transição de tom em xadrez e o longe sumindo no claro.",
+  "paleta": ["#0f380f", "#306230", "#8bac0f", "#9bbc0f"],
+  "ceu": ["#8bac0f", "#9bbc0f"],
+  "atmosfera": "#9bbc0f",
+  "luz": "#9bbc0f",
+  "contorno_cor": "#0f380f",
+  "rampas": {
+    "folha": ["#0f380f", "#306230", "#8bac0f"],
+    "tronco": ["#0f380f", "#306230"],
+    "pedra": ["#306230", "#8bac0f", "#9bbc0f"],
+    "terra": ["#0f380f", "#306230", "#8bac0f"],
+    "grama": ["#306230", "#8bac0f"],
+    "cristal": ["#306230", "#8bac0f", "#9bbc0f"],
+    "nuvem": ["#8bac0f", "#9bbc0f"],
+    "nevoa": ["#8bac0f", "#9bbc0f"],
+    "neve": ["#8bac0f", "#9bbc0f"]
+  },
+  "forca_atmosfera": 0.75,
+  "forca_luz": 0.5,
+  "sombreamento": "pontilhado",
+  "contorno": true,
+  "luz_contorno": false,
+  "direcao_luz": [-1, -1],
+  "largura_faixa": 1,
+  "tom_base": 0.5
+}

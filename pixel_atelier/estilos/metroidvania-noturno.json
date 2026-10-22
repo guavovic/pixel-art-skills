@@ -1,0 +1,29 @@
+{
+  "nome": "metroidvania-noturno",
+  "descricao": "Noite fria e escura: silhuetas chapadas que clareiam com a distância, luz de contorno ciano e pouco destaque de cor.",
+  "ceu": ["#070d1f", "#0b1730", "#12294a", "#1d4060", "#2c5a72"],
+  "atmosfera": "#3b6178",
+  "luz": "#8fd2d8",
+  "contorno_cor": "#02060a",
+  "rampas": {
+    "folha": ["#030a0f", "#08121b", "#0e1f2d", "#142c3d", "#1d3d52"],
+    "tronco": ["#04090e", "#0a1520", "#10202e", "#182c3c"],
+    "pedra": ["#050a12", "#0b1622", "#132232", "#1c3044", "#2a4258"],
+    "terra": ["#030a0f", "#08121b", "#0d1c27", "#132634"],
+    "grama": ["#0a2428", "#12383a", "#1f5c58", "#2c8a84"],
+    "cristal": ["#1a3a6a", "#2f6fb0", "#5fd3d6", "#b8f4f4"],
+    "nuvem": ["#1d3d52", "#2d5068", "#3b6178", "#4f7a8e"],
+    "nevoa": ["#4a7488", "#6aa6b4", "#8ac0cc"],
+    "neve": ["#4a6088", "#8aa0c0", "#d6e4f4"]
+  },
+  "extras": ["#e4f4f6", "#b6d3dc", "#cfe8ff"],
+  "niveis_profundidade": [0.35, 0.7, 1.0],
+  "forca_atmosfera": 0.8,
+  "forca_luz": 0.65,
+  "sombreamento": "chapado",
+  "contorno": false,
+  "luz_contorno": true,
+  "direcao_luz": [-1, -1],
+  "largura_faixa": 1,
+  "tom_base": 0.5
+}

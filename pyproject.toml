@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pixel-atelier"
+version = "0.1.0"
+description = "Ateliê de pixel art para agentes de IA: técnica guardada no motor, arte saindo de receitas curtas."
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.11"
+dependencies = ["Pillow>=10.0"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[tool.setuptools.packages.find]
+include = ["pixel_atelier*"]
+
+[tool.setuptools.package-data]
+pixel_atelier = ["estilos/*.json"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
