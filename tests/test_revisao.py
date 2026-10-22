@@ -9,6 +9,7 @@ from PIL import Image
 
 from pixel_atelier import Checagem, ampliar, carregar_estilo, compor, gerar, revisar
 from pixel_atelier.__main__ import main
+from pixel_atelier.revisao import CONTRASTE_FRENTE, _contraste, _medida
 
 VAZIO = (0, 0, 0, 0)
 
@@ -264,3 +265,11 @@ def test_linha_de_comando_revisa_e_responde_em_texto(tmp_path, capsys):
     assert saida.startswith("vale.png: 96x64") and "pixel solto:" in saida
     assert main(["revisar", str(tmp_path / "nada.png")]) == 2
     assert "revisão não feita" in capsys.readouterr().err
+
+
+def test_medida_perto_do_limite_nao_arredonda_para_o_limite():
+    assert _medida(0.0996, 0.10) == "0.0996"
+    assert _medida(0.13, 0.10) == "0.13" and _medida(0.10, 0.10) == "0.10"
+    assert _medida(0.2504, 0.25, ".0%") == "25.04%"
+    alerta = _contraste([("fundo", [(0, 0, 0.3)]), ("frente", [(0, 0, CONTRASTE_FRENTE - 0.0004)])])
+    assert alerta.estado == "alerta" and "fundo 0.0996 (mín 0.10)" in alerta.detalhe

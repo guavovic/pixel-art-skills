@@ -198,6 +198,14 @@ def _regiao(pontos: Iterable[tuple[int, int]]) -> str:
     return f"x{min(xs)}-{max(xs)} y{min(ys)}-{max(ys)}"
 
 
+def _medida(valor: float, limite: float, formato: str = ".2f") -> str:
+    """O valor no formato do limite, com mais casas quando o arredondamento o deixaria igual ao limite."""
+    tipo, casas = formato[-1], int(formato[1:-1])
+    while casas < 4 and valor != limite and format(valor, f".{casas}{tipo}") == format(limite, f".{casas}{tipo}"):
+        casas += 1
+    return format(valor, f".{casas}{tipo}")
+
+
 def _faixa(valores: Sequence[float]) -> float:
     return _percentil(valores, 0.95) - _percentil(valores, 0.05) if valores else 0.0
 
@@ -280,12 +288,12 @@ def _contraste(pares: list[tuple[str, list[tuple[int, int, float]]]]) -> Checage
     *trás, (nome_frente, frente) = medianas
     ruins = [(n, m) for n, m in trás if m < CONTRASTE_CAMADAS]
     rotulo = "sprite" if nome_frente == "sprite" else f"frente ({nome_frente})"
-    partes = [f"{rotulo} x fundo {frente:.2f} (mín {CONTRASTE_FRENTE:.2f})"]
+    partes = [f"{rotulo} x fundo {_medida(frente, CONTRASTE_FRENTE)} (mín {CONTRASTE_FRENTE:.2f})"]
     if trás:
         pior = min(trás, key=lambda t: t[1])
-        partes.append(f"entre camadas mín {pior[1]:.2f} em {pior[0]} (mín {CONTRASTE_CAMADAS:.2f})")
+        partes.append(f"entre camadas mín {_medida(pior[1], CONTRASTE_CAMADAS)} em {pior[0]} (mín {CONTRASTE_CAMADAS:.2f})")
     if ruins:
-        partes.append("baixo em " + ", ".join(f"{n} {m:.2f}" for n, m in ruins[:3]))
+        partes.append("baixo em " + ", ".join(f"{n} {_medida(m, CONTRASTE_CAMADAS)}" for n, m in ruins[:3]))
     alerta = frente < CONTRASTE_FRENTE or bool(ruins)
     return Checagem("contraste", "alerta" if alerta else "ok", "; ".join(partes))
 
@@ -297,10 +305,10 @@ def _legibilidade(borda_frente: list[tuple[int, int, float]] | None, fundo: _Px 
         fracao = len(somem) / len(borda_frente)
         valores = [fundo.valor(x, y) for y in range(fundo.altura) for x in range(fundo.largura) if fundo.cheio(x, y)]
         faixa = _faixa(valores)
-        partes = [f"{rotulo} some no fundo em {fracao:.0%} da borda (máx {SOME_MAX:.0%})"]
+        partes = [f"{rotulo} some no fundo em {_medida(fracao, SOME_MAX, '.0%')} da borda (máx {SOME_MAX:.0%})"]
         if fracao > SOME_MAX:
             partes[0] += f", {_regiao(somem)}"
-        partes.append(f"fundo com faixa de valor {faixa:.2f} (mín {FAIXA_FUNDO:.2f})")
+        partes.append(f"fundo com faixa de valor {_medida(faixa, FAIXA_FUNDO)} (mín {FAIXA_FUNDO:.2f})")
         if faixa < FAIXA_FUNDO:
             partes.append("fundo apagado: destaque a frente por contraste, não escurecendo o fundo")
         alerta = fracao > SOME_MAX or faixa < FAIXA_FUNDO
@@ -308,7 +316,7 @@ def _legibilidade(borda_frente: list[tuple[int, int, float]] | None, fundo: _Px 
     if alvo is not None:
         valores = [alvo.valor(x, y) for y in range(alvo.altura) for x in range(alvo.largura) if alvo.cheio(x, y)]
         faixa = _faixa(valores)
-        detalhe = f"faixa de valor do sprite {faixa:.2f} (mín {FAIXA_SPRITE:.2f}; teste em escala de cinza)"
+        detalhe = f"faixa de valor do sprite {_medida(faixa, FAIXA_SPRITE)} (mín {FAIXA_SPRITE:.2f}; teste em escala de cinza)"
         return Checagem("legibilidade", "alerta" if faixa < FAIXA_SPRITE else "ok", detalhe)
     return Checagem("legibilidade", "pulada", "sem camadas nem fundo (passe camadas ou fundo)")
 
