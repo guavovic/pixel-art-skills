@@ -5,7 +5,7 @@ import math
 from pathlib import Path
 from typing import Iterable
 
-from PIL import Image
+from PIL import Image, ImageChops
 from PIL.PngImagePlugin import PngInfo
 
 MARCA_LACO = "pixel-atelier:laco"  # chave de texto no PNG que o `gerar` grava: "sim" ou "nao"
@@ -84,3 +84,28 @@ def escala_inteira(imagem: Image.Image) -> int:
 def reduzir(imagem: Image.Image, n: int) -> Image.Image:
     """Desfaz `ampliar(imagem, n)`: um pixel por bloco NxN."""
     return imagem if n == 1 else imagem.resize((imagem.width // n, imagem.height // n), Image.Resampling.NEAREST)
+
+
+def vizinho(imagem: Image.Image, dx: int, dy: int, laco: bool = False) -> Image.Image:
+    """Imagem em que cada pixel traz o vizinho a um passo (dx ou dy, o outro zero).
+
+    Fora da borda fica o próprio pixel; com `laco`, a horizontal dá a volta.
+    """
+    if dx and laco:
+        return ImageChops.offset(imagem, -dx, 0)
+    largura, altura = imagem.size
+    saida = imagem.copy()
+    if dx:
+        saida.paste(imagem.crop((max(0, dx), 0, largura + min(0, dx), altura)), (max(0, -dx), 0))
+    if dy:
+        saida.paste(imagem.crop((0, max(0, dy), largura, altura + min(0, dy))), (0, max(0, -dy)))
+    return saida
+
+
+def iguais(a: Image.Image, b: Image.Image) -> Image.Image:
+    """Máscara L: 255 onde os dois pixels são iguais em todos os canais."""
+    diferenca = ImageChops.difference(a, b)
+    algum = diferenca.getchannel(0)
+    for banda in range(1, len(diferenca.getbands())):
+        algum = ImageChops.lighter(algum, diferenca.getchannel(banda))
+    return algum.point(lambda v: 0 if v else 255)
