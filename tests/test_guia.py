@@ -60,7 +60,7 @@ def test_cada_limiar_do_revisar_esta_no_guia():
                        for n in _escrito(nome, getattr(revisao, nome))), (nome, linha)
 
 
-@pytest.mark.parametrize("nome", ["metroidvania-noturno", "snes-diurno"])
+@pytest.mark.parametrize("nome", ["metroidvania-noturno", "snes-diurno", "game-boy"])
 def test_exemplos_do_pacote_passam_sem_alerta(nome, tmp_path):
     receita = json.loads((EXEMPLOS / f"{nome}.json").read_text(encoding="utf-8"))
     gerar({**receita, "saida": "tudo", "ampliar": 1}, pasta=tmp_path)
