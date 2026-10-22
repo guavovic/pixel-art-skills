@@ -1,0 +1,28 @@
+{
+  "nome": "snes-diurno",
+  "descricao": "Dia claro de 16 bits: cores saturadas, rampas com mudança de matiz, faixas de luz e sombra e contorno escuro.",
+  "ceu": ["#3868c8", "#5088e0", "#78a8f0", "#a8ccf8", "#d8ecfc"],
+  "atmosfera": "#b8d4f0",
+  "luz": "#fff0b0",
+  "contorno_cor": "#20183a",
+  "rampas": {
+    "folha": {"base": "#3c8c34", "passos": 5, "matiz": 24},
+    "tronco": {"base": "#7a4e2c", "passos": 4, "matiz": 18, "escuro": 0.22, "claro": 0.75},
+    "pedra": {"base": "#7c7c90", "passos": 5, "matiz": 16, "escuro": 0.25},
+    "terra": {"base": "#8a5a30", "passos": 5, "matiz": 18, "escuro": 0.22, "claro": 0.8},
+    "grama": {"base": "#58b040", "passos": 4, "matiz": 22, "escuro": 0.4},
+    "cristal": {"base": "#b048e0", "passos": 4, "matiz": 30, "escuro": 0.35, "claro": 1.0},
+    "nuvem": ["#98acd8", "#c8d8f0", "#ffffff"],
+    "nevoa": ["#d0e0f0", "#f0f6fc"],
+    "neve": ["#a8b8d8", "#e0ecf8", "#ffffff"]
+  },
+  "niveis_profundidade": [0.35, 0.7, 1.0],
+  "forca_atmosfera": 0.65,
+  "forca_luz": 0.5,
+  "sombreamento": "faixas",
+  "contorno": true,
+  "luz_contorno": true,
+  "direcao_luz": [-1, -1],
+  "largura_faixa": 2,
+  "tom_base": 0.5
+}
