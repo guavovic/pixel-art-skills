@@ -69,6 +69,29 @@ Configuração num cliente MCP genérico (o formato `mcpServers` que a maioria a
 
 Se o comando `pixel-atelier` não estiver no PATH do cliente, use `"command": "python"` com `"args": ["-m", "pixel_atelier", "mcp", "--raiz", "..."]`.
 
+## Embalagens (issue #7)
+
+O mesmo ateliê empacotado para cada ferramenta de agente, gerado de uma fonte só (`AGENTS.md`, guia, ferramentas do `servidor.py` e `pyproject.toml`) por `python scripts/embalar.py`. Cada embalagem registra o servidor MCP e leva o fluxo: estilo ou `ref`, receita, `gerar`, `revisar` em texto, imagem só na aprovação final. Onde colocar cada uma está em [`embalagens/README.md`](embalagens/README.md).
+
+| Ferramenta | Embalagem disponível |
+| --- | --- |
+| Claude Code | plugin em `embalagens/claude-code/` (servidor em `.mcp.json` e uma skill), com marketplace em `.claude-plugin/marketplace.json` |
+| OpenAI Codex | skill em `.agents/skills/pixel-atelier/` e servidor em `.codex/config.toml` |
+| Gemini CLI | extensão com `gemini-extension.json` (servidor) e `GEMINI.md` |
+| Cursor | regra `.cursor/rules/pixel-atelier.mdc` e servidor em `.cursor/mcp.json` |
+| GitHub Copilot | `.github/copilot-instructions.md` e servidor em `.vscode/mcp.json` |
+
+Ainda não testadas em cada ferramenta: esse teste é a #8.
+
+```
+python scripts/embalar.py             # regenera embalagens/ e .claude-plugin/marketplace.json
+python scripts/embalar.py --conferir  # sai com 1 se alguma estiver desatualizada (o pytest também confere)
+```
+
+### Chats do navegador
+
+Os chats no navegador (claude.ai, ChatGPT) só ligam servidor MCP remoto: o conector recebe uma URL HTTPS e quem conecta é a nuvem do serviço, não o computador de quem usa. O pixel-atelier é um servidor local por stdio, que grava os PNGs numa pasta do projeto; para virar conector ele precisaria ser hospedado com transporte HTTP, e as imagens ficariam no servidor, longe do projeto. Por isso não há embalagem de conector. No computador, o Claude Desktop e outros clientes que aceitam servidor local podem usar a configuração `mcpServers` da seção acima.
+
 ## Revisão (issue #4)
 
 `revisao.py` confere a imagem pelas regras de pixel art e responde em texto, uma linha por regra: `ok`, `alerta` ou `pulada`, o número que justifica e onde. O agente lê o relatório no lugar da imagem e só abre o PNG na aprovação final.
