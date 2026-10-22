@@ -11,7 +11,8 @@ Saída (nunca editada à mão, sempre regenerada por este script):
     embalagens/codex/               skill em .agents/skills e servidor em .codex/config.toml
     embalagens/gemini/              extensão do Gemini CLI (gemini-extension.json, GEMINI.md)
     embalagens/cursor/              regra em .cursor/rules e servidor em .cursor/mcp.json
-    embalagens/copilot/             .github/copilot-instructions.md e servidor em .vscode/mcp.json
+    embalagens/copilot/             .github/copilot-instructions.md, servidor do VS Code em .vscode/mcp.json
+                                    e do Copilot CLI em .github/mcp.json
     embalagens/README.md            onde colocar cada uma
     .claude-plugin/marketplace.json marketplace do repositório, aponta para embalagens/claude-code
 
@@ -192,7 +193,8 @@ def codex(f: dict) -> dict[str, str]:
     base = f"{SAIDA}/codex"
     config = (
         f"# {AVISO}\n"
-        "# O servidor sobe na pasta onde o Codex abriu; para outra raiz, acrescente \"--raiz\", \"<pasta>\" em args.\n"
+        "# Sem cwd, o Codex sobe o servidor na pasta da sessão (onde abriu, ou a de --cd), que vira a raiz;\n"
+        "# para outra raiz, acrescente \"--raiz\", \"<pasta>\" em args.\n"
         f"[mcp_servers.{f['nome']}]\n"
         f"command = {json.dumps(f['nome'])}\n"
         'args = ["mcp"]\n'
@@ -224,8 +226,12 @@ def cursor(f: dict) -> dict[str, str]:
 
 def copilot(f: dict) -> dict[str, str]:
     base = f"{SAIDA}/copilot"
+    # O Copilot CLI não lê .vscode/mcp.json: lê .github/mcp.json, com servidor "local" e sem variável de pasta.
+    cli = servidor_stdio(f, None, type="local")
+    cli[f["nome"]]["tools"] = ["*"]
     return {
         f"{base}/.github/copilot-instructions.md": markdown(instrucoes(f)),
+        f"{base}/.github/mcp.json": json_texto({"mcpServers": cli}),
         f"{base}/.vscode/mcp.json": json_texto({"servers": servidor_stdio(f, "${workspaceFolder}", type="stdio")}),
     }
 
@@ -246,15 +252,18 @@ Antes de qualquer uma, instale o servidor:
 |---|---|---|---|
 | `claude-code/` | Claude Code | plugin: `.claude-plugin/plugin.json`, `.mcp.json` e a skill `skills/{nome}/` | `/plugin install {nome} --marketplace guavovic/pixel-atelier`, ou em dois passos `/plugin marketplace add guavovic/pixel-atelier` e `/plugin install {nome}@{nome}` (o marketplace fica em `.claude-plugin/marketplace.json` na raiz do repositório); no clone, `claude --plugin-dir embalagens/claude-code` |
 | `codex/` | OpenAI Codex | skill em `.agents/skills/{nome}/` e servidor em `.codex/config.toml` | as duas pastas na raiz do projeto (o `.codex/config.toml` do projeto só vale em projeto confiável), ou a skill em `~/.agents/skills/` e o trecho `[mcp_servers.{nome}]` em `~/.codex/config.toml` |
-| `gemini/` | Gemini CLI | extensão: `gemini-extension.json` (com o servidor) e `GEMINI.md` | `gemini extensions install <clone>/embalagens/gemini` (ou `gemini extensions link` para acompanhar o clone) |
+| `gemini/` | Gemini CLI | extensão: `gemini-extension.json` (com o servidor) e `GEMINI.md` | `gemini extensions install <clone>/embalagens/gemini` (ou `gemini extensions link` para acompanhar o clone); a extensão fica em `~/.gemini/extensions/{nome}/`, com o nome do manifesto, então a pasta de origem pode se chamar `gemini` |
 | `cursor/` | Cursor | regra `.cursor/rules/{nome}.mdc`, aplicada quando o agente acha que o pedido pede, e servidor em `.cursor/mcp.json` | a pasta `.cursor/` na raiz do projeto, ou o servidor em `~/.cursor/mcp.json` |
-| `copilot/` | GitHub Copilot | `.github/copilot-instructions.md` e servidor em `.vscode/mcp.json` | as duas pastas na raiz do repositório; se ele já tiver `copilot-instructions.md`, junte o texto ao que existe |
+| `copilot/` | GitHub Copilot | `.github/copilot-instructions.md`, servidor do VS Code em `.vscode/mcp.json` e do Copilot CLI em `.github/mcp.json` | as duas pastas na raiz do repositório; se ele já tiver `copilot-instructions.md` ou `.github/mcp.json`, junte ao que existe |
 
 O comando `{nome}` precisa estar no PATH de quem abre a ferramenta, porque é ela que sobe o servidor. No Windows, venv sem ativar ou `pip install --user` deixam o comando fora: abra a ferramenta com o venv ativado, instale com `pipx`, ou troque `command` no arquivo de MCP pelo caminho absoluto do executável (`...\\Scripts\\{nome}.exe`).
 
-O servidor recebe a pasta do projeto pela variável de cada ferramenta (`${{CLAUDE_PROJECT_DIR}}`, `${{workspacePath}}`, `${{workspaceFolder}}`); no Codex ele sobe sem `--raiz`, na pasta onde o Codex abriu.
+O servidor recebe a pasta do projeto pela variável de cada ferramenta (`${{CLAUDE_PROJECT_DIR}}`, `${{workspacePath}}`, `${{workspaceFolder}}`). O Codex e o Copilot CLI não documentam variável de pasta: neles o servidor sobe sem `--raiz` e usa a pasta em que a ferramenta o abre (no Codex, a pasta da sessão, conferido no código do Codex).
 
-Embalagem disponível não quer dizer testada: o teste em cada ferramenta é a issue #8.
+| Ferramenta | Situação |
+|---|---|
+| Claude Code | testado de ponta a ponta (#8) |
+| OpenAI Codex, Gemini CLI, Cursor, GitHub Copilot | formato validado pela documentação (`tests/test_formato_embalagens.py`) e servidor testado com cliente MCP; teste de ponta a ponta pendente |
 """
 
 

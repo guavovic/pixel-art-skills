@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "pixel-atelier": {
+      "type": "local",
+      "command": "pixel-atelier",
+      "args": [
+        "mcp"
+      ],
+      "tools": [
+        "*"
+      ]
+    }
+  }
+}

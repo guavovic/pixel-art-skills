@@ -73,15 +73,15 @@ O comando `pixel-atelier` precisa estar no PATH de quem abre a ferramenta (o cli
 
 O mesmo ateliê empacotado para cada ferramenta de agente, gerado de uma fonte só (`AGENTS.md`, guia, ferramentas do `servidor.py` e `pyproject.toml`) por `python scripts/embalar.py`. Cada embalagem registra o servidor MCP e leva o fluxo: estilo ou `ref`, receita, `gerar`, `revisar` em texto, imagem só na aprovação final. Onde colocar cada uma está em [`embalagens/README.md`](embalagens/README.md).
 
-| Ferramenta | Embalagem disponível |
-| --- | --- |
-| Claude Code | plugin em `embalagens/claude-code/` (servidor em `.mcp.json` e uma skill), com marketplace em `.claude-plugin/marketplace.json` |
-| OpenAI Codex | skill em `.agents/skills/pixel-atelier/` e servidor em `.codex/config.toml` |
-| Gemini CLI | extensão com `gemini-extension.json` (servidor) e `GEMINI.md` |
-| Cursor | regra `.cursor/rules/pixel-atelier.mdc` e servidor em `.cursor/mcp.json` |
-| GitHub Copilot | `.github/copilot-instructions.md` e servidor em `.vscode/mcp.json` |
+| Ferramenta | Embalagem | Situação |
+| --- | --- | --- |
+| Claude Code | plugin em `embalagens/claude-code/` (servidor em `.mcp.json` e uma skill), com marketplace em `.claude-plugin/marketplace.json` | testado de ponta a ponta (#8) |
+| OpenAI Codex | skill em `.agents/skills/pixel-atelier/` e servidor em `.codex/config.toml` | formato validado pela documentação e servidor testado com cliente MCP; teste de ponta a ponta pendente |
+| Gemini CLI | extensão com `gemini-extension.json` (servidor) e `GEMINI.md` | formato validado pela documentação e servidor testado com cliente MCP; teste de ponta a ponta pendente |
+| Cursor | regra `.cursor/rules/pixel-atelier.mdc` e servidor em `.cursor/mcp.json` | formato validado pela documentação e servidor testado com cliente MCP; teste de ponta a ponta pendente |
+| GitHub Copilot | `.github/copilot-instructions.md`, servidor do VS Code em `.vscode/mcp.json` e do Copilot CLI em `.github/mcp.json` | formato validado pela documentação e servidor testado com cliente MCP; teste de ponta a ponta pendente |
 
-Ainda não testadas em cada ferramenta: esse teste é a #8.
+O formato de cada embalagem (campos obrigatórios, tipos, frontmatter, variáveis de pasta, lugar de cada arquivo) é conferido por `tests/test_formato_embalagens.py`, com a fonte de cada regra no comentário. O servidor foi chamado pelo MCP Inspector com o comando exato de cada embalagem (#8).
 
 ```
 python scripts/embalar.py             # regenera embalagens/ e .claude-plugin/marketplace.json
