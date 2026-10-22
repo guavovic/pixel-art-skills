@@ -18,7 +18,7 @@ Formato do dicionário (sem `base`, só `nome`, `ceu`, `atmosfera`, `luz` e `ram
         "folha": ["#escuro", "...", "#claro"],
         "pedra": {"base": "#8a8a96", "passos": 5, "matiz": 20}
       },
-      "paleta": ["#..."],              # opcional: paleta fechada; sem ela, a paleta sai das rampas
+      "paleta": ["#..."],              # opcional: paleta fechada; sem ela, a paleta sai das rampas, sem par quase igual
       "extras": ["#..."],              # opcional: cores a mais na paleta derivada
       "niveis_profundidade": [0.4, 0.7],  # opcional: rampas já misturadas com a atmosfera
       "forca_atmosfera": 0.7,          # quanto a profundidade 1 puxa para a atmosfera
@@ -44,7 +44,8 @@ from importlib import resources
 from pathlib import Path
 from typing import Any, Iterator
 
-from .cor import RGB, cor_mais_proxima, gerar_rampa, hex_para_rgb, luminancia, misturar, rgb_para_hex, sem_repetir
+from .cor import (RGB, cor_mais_proxima, gerar_rampa, hex_para_rgb, luminancia, misturar, rgb_para_hex, sem_quase_iguais,
+                  sem_repetir)
 
 PAPEIS = ("folha", "tronco", "pedra", "terra", "grama", "cristal", "nuvem", "nevoa", "neve")
 
@@ -157,7 +158,7 @@ class Estilo:
             cores.extend(hex_para_rgb(c) for c in dados.get("extras", ()))
             if "contorno_cor" in dados:
                 cores.append(hex_para_rgb(dados["contorno_cor"]))
-            paleta = sem_repetir(cores)
+            paleta = sem_quase_iguais(cores)  # rampa misturada com a atmosfera cai a 1 ou 2 de outra cor
         if len(paleta) > 256:
             raise ValueError(f"paleta com {len(paleta)} cores; o limite é 256")
 

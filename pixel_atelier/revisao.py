@@ -77,13 +77,14 @@ from typing import Any, Iterable, Sequence
 
 from PIL import Image, ImageChops
 
-from .cor import distancia2, luminancia, rgb_para_hex
+from .cor import QUASE_IGUAL, distancia2, luminancia, rgb_para_hex
 from .estilo import Estilo, carregar_estilo
 from .imagem import abrir, compor, escala_indicada, escala_inteira, marca_de_laco, reduzir, vizinho
 
 CORES_SPRITE = 16
 CORES_CENA = 64  # o SNES põe até 128 cores de fundo na tela (8 subpaletas de 16); 64 deixa folga sem virar foto
-QUASE_IGUAL = 4  # distância RGB abaixo disso: duas cores que o olho não separa (só informa)
+# QUASE_IGUAL (4, em `cor`): distância RGB abaixo disso, duas cores que o olho não separa (só informa);
+# a paleta que o estilo monta das rampas já sai sem esses pares
 CONTRASTE_CAMADAS = 0.05  # o passo mínimo visível (= SOME): o longe pode ter pouco contraste, não nenhum
 CONTRASTE_FRENTE = 0.10  # o dobro do mínimo: a frente é o que precisa ler
 SOME = 0.05  # diferença de valor abaixo disso: a borda some no fundo

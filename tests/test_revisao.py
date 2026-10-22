@@ -63,6 +63,11 @@ def test_cores_dentro_do_limite_e_acima_dele():
     c = regra(revisar(muitas), "cores")
     assert c.estado == "alerta" and c.detalhe.startswith("20 (limite 16)")  # sprite: limite 16
 
+    parecidas = poucas.copy()  # a paleta do motor já não tem par quase igual; imagem de fora ainda pode ter
+    parecidas.paste(cinza(22), (0, 0, 3, 8))
+    c = regra(revisar(parecidas), "cores")
+    assert c.estado == "ok" and "1 par quase igual (#141414~#161616)" in c.detalhe
+
 
 def test_cor_fora_da_paleta_do_estilo():
     paleta = carregar_estilo("game-boy").paleta

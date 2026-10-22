@@ -16,7 +16,7 @@ Valor (claro e escuro) carrega a leitura; matiz e saturação dão o clima. Esco
 - Comece com poucas cores e só acrescente quando faltar. Sprite: até **16** cores (`CORES_SPRITE`). Cena: até **64** (`CORES_CENA`).
 - Por quê: 16 é uma subpaleta de console 16 bits (15 cores e o transparente); uma tela de SNES mostra até 128 cores de fundo (8 subpaletas de 16), então 64 deixa folga sem virar foto.
 - Mais de 256 cores: o `revisar` avisa que não parece pixel art (borrão, anti-alias automático ou JPEG).
-- Duas cores a menos de **4** de distância RGB (`QUASE_IGUAL`) o olho não separa: junte. O `revisar` só informa esses pares.
+- Duas cores a menos de **4** de distância RGB (`QUASE_IGUAL`) o olho não separa: junte. A paleta que o estilo monta das rampas já junta sozinha; numa paleta fechada à mão, o `revisar` só informa esses pares.
 - Uma cor de destaque por cena, usada pouco (lanterna, cristal, olho do inimigo). É o que dá vida.
 - Paletas prontas: lospec.com/palette-list (escolha pelo número de cores).
 

@@ -16,6 +16,7 @@ RGB = tuple[int, int, int]
 
 AMARELO = 60 / 360  # para onde a luz puxa o matiz
 AZUL = 240 / 360  # para onde a sombra puxa o matiz
+QUASE_IGUAL = 4  # distância RGB abaixo disso: duas cores que o olho não separa
 
 
 def hex_para_rgb(valor: str) -> RGB:
@@ -72,6 +73,20 @@ def sem_repetir(cores: Iterable[RGB]) -> list[RGB]:
             vistas.add(c)
             saida.append(c)
     return saida
+
+
+def sem_quase_iguais(cores: Iterable[RGB]) -> list[RGB]:
+    """Como `sem_repetir`, mas também deixa de fora a cor a menos de `QUASE_IGUAL` de uma já guardada.
+
+    A primeira vale: a cor que fica de fora é trocada por ela na quantização, diferença que o olho
+    não vê. Assim a paleta não gasta duas entradas com o que parece uma cor só.
+    """
+    guardadas: list[RGB] = []
+    limite = QUASE_IGUAL ** 2
+    for c in cores:
+        if all(distancia2(c, g) >= limite for g in guardadas):
+            guardadas.append(c)
+    return guardadas
 
 
 def _puxar_matiz(h: float, alvo: float, quanto: float) -> float:
