@@ -45,10 +45,11 @@ pixel-atelier mcp --raiz caminho/do/projeto   # ou python -m pixel_atelier mcp
 | `descrever_formas` | formas e parâmetros, com o padrão |
 | `listar_estilos` | presets do pacote e do usuário |
 | `registrar_estilo` | guarda um estilo (objeto ou caminho `.json`) como preset com nome |
+| `ref` | tira o estilo de uma imagem de referência e grava como preset (ver Referência) |
 
 Toda resposta é texto curto, nunca a imagem. Receita inválida volta como erro com a lista de problemas.
 
-**Caminhos**: o servidor só lê e grava dentro da raiz (`--raiz`, ou a pasta onde ele subiu). Caminho relativo parte da raiz; caminho absoluto ou com `..` que saia dela é recusado. Sem `pasta`, `gerar` grava ao lado do arquivo da receita, ou na raiz quando a receita vem como objeto. `registrar_estilo` grava na pasta de presets do usuário, como na linha de comando.
+**Caminhos**: o servidor só lê e grava dentro da raiz (`--raiz`, ou a pasta onde ele subiu). Caminho relativo parte da raiz; caminho absoluto ou com `..` que saia dela é recusado. Sem `pasta`, `gerar` grava ao lado do arquivo da receita, ou na raiz quando a receita vem como objeto. `registrar_estilo` e `ref` gravam na pasta de presets do usuário, como na linha de comando; a imagem que `ref` lê fica dentro da raiz.
 
 Configuração num cliente MCP genérico (o formato `mcpServers` que a maioria aceita):
 
@@ -102,6 +103,36 @@ Com problema, a linha diz o quanto e onde, por exemplo `alerta legibilidade: fre
 | composição repetida | trecho de 12x12 com detalhe igual 3+ vezes |
 
 Valor é a luminância (o teste em escala de cinza). Contraste, legibilidade e silhuetas precisam das camadas (a pasta que `gerar` grava, achada sozinha, ou `--camadas`) ou de um `--fundo`; sem elas a regra sai como `pulada`. Imagem ampliada (`-3x.png`) é revisada no tamanho real. As regras marcadas `[heurística]` são aproximações: confira na aprovação final. Névoa e raios em pontilhado ficam fora do contraste, porque são transparentes de propósito. Os limiares ficam no topo de `revisao.py`.
+
+## Referência (issue #5)
+
+`referencia.py` tira o estilo de uma imagem de referência e grava como preset. A imagem é vista uma vez; depois a receita usa só o nome (`"estilo": "dia-claro"`).
+
+```
+python -m pixel_atelier ref referencia.png --nome dia-claro [--base snes-diurno] [--cores 32] [--sobrescrever]
+```
+
+```
+preset dia-claro gravado em ~/.pixel-atelier/estilos/dia-claro.json, base snes-diurno
+referência snes-diurno-3x.png: 960x540, ampliada 3x (pixel real 320x180)
+paleta: 31 cores (de 57 na imagem)
+valor: 0.11 a 0.92, faixa 0.55 (p5 a p95)
+rampas, do escuro ao claro (céu: do topo ao horizonte):
+  folha, grama: 6 cores #245a31 > #bae884, valor 0.30 a 0.84, passo 0.11
+  terra, tronco: 3 cores #82552d > #c17e95, valor 0.36 a 0.56, passo 0.10
+  pedra: 5 cores #675a5e > #acb2b3, valor 0.36 a 0.69, passo 0.08
+  nuvem, nevoa, neve: 4 cores #c5dbf0 > #dfebf8, valor 0.85 a 0.92, passo 0.02
+  ceu: 5 cores #3868c8 > #78a8f0, valor 0.40 a 0.64, passo 0.06
+da base, só com cores da paleta: cristal
+luz #dfebf8, contorno #20183a, atmosfera #78a8f0
+aviso: 57 cores na referência; paleta reduzida para 31 (cores sobe o limite)
+```
+
+- **Pixel**: imagem ampliada (blocos NxN) é lida no tamanho real.
+- **Paleta**: as cores da imagem, exatas até `--cores` (padrão 32); acima disso, quantizada pelo corte de mediana do Pillow, com aviso. Foto ou imagem com anti-aliasing (mais de 256 cores) é reduzida pela média até 256 por lado antes, com aviso para conferir as rampas.
+- **Rampas**: cada cor cai numa família pelo matiz, do escuro ao claro: verde vai para `folha` e `grama`, quente (vermelho, laranja, marrom) para `terra` e `tronco`, cinza para `pedra`, cinza claro para `nuvem`, `nevoa` e `neve`, roxo para `cristal`. O céu é a cor mais comum de cada linha do terço de cima, do topo ao horizonte; a do horizonte vira a atmosfera. Luz é a cor mais clara, contorno a mais escura.
+- **Contraste**: faixa de valor (p5 a p95, como no `revisar`) e o passo de valor de cada rampa, no texto e no bloco `referencia` do preset.
+- **Base**: o que a imagem não diz (sombreamento, contorno, direção da luz, papel sem família) vem de `--base`. A paleta do preset é fechada nas cores da referência, então até o que vem da base é pintado só com elas.
 
 ## Uso
 
@@ -159,6 +190,7 @@ python -m pixel_atelier gerar receita.json [--pasta saida]   # ou "-" para ler d
 python -m pixel_atelier formas                               # parâmetros de cada forma, com o padrão
 python -m pixel_atelier estilos
 python -m pixel_atelier registrar-estilo meu-estilo.json [--nome nome] [--sobrescrever]
+python -m pixel_atelier ref referencia.png [--nome nome]       # estilo novo a partir de uma imagem
 ```
 
 Grava `<cena>.png`, `<cena>-3x.png` e `<cena>/01-ceu.png`... e responde em texto, sem precisar abrir a imagem:
@@ -188,7 +220,7 @@ python -m pixel_atelier gerar exemplos/snes-diurno.json
 python -m pixel_atelier revisar exemplos/snes-diurno-3x.png
 ```
 
-Requer Python 3.11+ e Pillow. Sem numpy. O servidor MCP pede o pacote `mcp` (extra `[mcp]`, já incluso no `[dev]`). O servidor MCP pede o pacote `mcp` (extra `[mcp]`, já incluso no `[dev]`).
+Requer Python 3.11+ e Pillow. Sem numpy. O servidor MCP pede o pacote `mcp` (extra `[mcp]`, já incluso no `[dev]`).
 
 ## Licença
 
