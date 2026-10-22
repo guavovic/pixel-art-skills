@@ -7,10 +7,10 @@ Toda ferramenta responde em texto curto e nunca devolve a imagem. Erro de receit
 lista de problemas, sem stack trace.
 
 Regra dos caminhos: tudo que o servidor lê ou grava por caminho (receita, pasta de saída, JSON
-de estilo) fica dentro da raiz, que é a pasta de `--raiz` ou, sem ela, a pasta onde o servidor
+de estilo, inclusive o `.json` de `estilo` e de `base`) fica dentro da raiz, que é a pasta de `--raiz` ou, sem ela, a pasta onde o servidor
 subiu. Caminho relativo parte da raiz; caminho absoluto vale só se cair dentro dela; `..` ou
 atalho que leve para fora é recusado. A exceção é `registrar_estilo` e `ref`, que gravam na
-pasta de presets do usuário (a mesma da linha de comando), com nome validado; a imagem que `ref`
+pasta de presets do usuário (a mesma da linha de comando), com nome validado (o nome de estilo nunca é caminho: só preset ou .json); a imagem que `ref`
 lê fica dentro da raiz.
 
 Ferramenta nova entra em `criar_servidor` com `@ferramenta(name=...)`: uma função por ferramenta,
@@ -27,7 +27,7 @@ from mcp.types import ToolAnnotations
 from pydantic import Field
 
 from . import __version__
-from .estilo import NOME_VALIDO, descrever_estilos, registrar_estilo
+from .estilo import NOME_VALIDO, descrever_estilos, estilos_so_em, registrar_estilo
 from .gerador import gerar
 from .receita import ErroDeReceita, descrever_formas
 from .referencia import CORES, ref
@@ -71,7 +71,8 @@ def criar_servidor(raiz: str | Path | None = None) -> MCPServer:
             padrao = raiz
         saida = dentro_da_raiz(raiz, pasta, "pasta") if pasta else padrao
         try:
-            return gerar(receita, pasta=saida).resumo(base=raiz)
+            with estilos_so_em(raiz):  # estilo por nome de preset ou .json dentro da raiz
+                return gerar(receita, pasta=saida).resumo(base=raiz)
         except ErroDeReceita as erro:
             raise ToolError(str(erro)) from None
 
@@ -88,12 +89,11 @@ def criar_servidor(raiz: str | Path | None = None) -> MCPServer:
         arquivo = dentro_da_raiz(raiz, imagem, "imagem")
         if not arquivo.is_file():
             raise ToolError(f"arquivo {imagem!r} não existe dentro da raiz {raiz.as_posix()}")
-        if estilo and estilo.endswith(".json"):
-            estilo = dentro_da_raiz(raiz, estilo, "estilo")
         try:
-            return revisar(arquivo, camadas=dentro_da_raiz(raiz, camadas, "camadas") if camadas else None,
-                           fundo=dentro_da_raiz(raiz, fundo, "fundo") if fundo else None,
-                           posicao=tuple(posicao) if posicao else None, estilo=estilo).resumo()
+            with estilos_so_em(raiz):
+                return revisar(arquivo, camadas=dentro_da_raiz(raiz, camadas, "camadas") if camadas else None,
+                               fundo=dentro_da_raiz(raiz, fundo, "fundo") if fundo else None,
+                               posicao=tuple(posicao) if posicao else None, estilo=estilo).resumo()
         except (OSError, KeyError, ValueError) as erro:
             raise ToolError(f"revisão não feita: {erro.args[0] if erro.args else erro}") from None
 
@@ -119,7 +119,8 @@ def criar_servidor(raiz: str | Path | None = None) -> MCPServer:
                 raise ToolError('estilo deve ser um objeto ou o caminho de um arquivo .json')
             estilo = dentro_da_raiz(raiz, estilo, "estilo")
         try:
-            destino = registrar_estilo(estilo, nome, sobrescrever=sobrescrever)
+            with estilos_so_em(raiz):  # a `base` de um objeto também não sai da raiz
+                destino = registrar_estilo(estilo, nome, sobrescrever=sobrescrever)
         except (OSError, KeyError, ValueError, TypeError) as erro:
             raise ToolError(f"estilo não registrado: {erro.args[0] if erro.args else erro}") from None
         return f"preset {destino.stem} gravado em {destino.as_posix()}"
@@ -143,7 +144,8 @@ def criar_servidor(raiz: str | Path | None = None) -> MCPServer:
         else:
             raise ToolError(f"base {base!r} deve ser o nome de um preset ou um arquivo .json")
         try:
-            return ref(arquivo, nome, base=estilo_base, cores=cores, sobrescrever=sobrescrever).resumo()
+            with estilos_so_em(raiz):
+                return ref(arquivo, nome, base=estilo_base, cores=cores, sobrescrever=sobrescrever).resumo()
         except (OSError, KeyError, ValueError, TypeError) as erro:
             raise ToolError(f"preset não gravado: {erro.args[0] if erro.args else erro}") from None
 

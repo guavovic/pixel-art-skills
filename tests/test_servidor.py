@@ -185,3 +185,86 @@ def test_sobe_por_stdio_com_o_comando_mcp(tmp_path):
     resposta = asyncio.run(rodar())
     assert not resposta.is_error and "composto: saida/mcp.png" in resposta.content[0].text
     assert (tmp_path / "saida" / "mcp.png").is_file()
+
+
+# --- nome de estilo (#18): gerar e revisar não saem da raiz nem da pasta de presets ---
+
+def _preparar_estilos(tmp_path):
+    """Raiz com uma imagem para revisar, um estilo dentro dela e outro fora (com a mesma forma)."""
+    from PIL import Image
+
+    raiz = tmp_path / "raiz"
+    raiz.mkdir()
+    Image.new("RGB", (16, 16), (90, 90, 90)).save(raiz / "img.png")
+    dados = json.dumps({"base": "game-boy", "nome": "de-arquivo"})
+    (raiz / "dentro.json").write_text(dados, encoding="utf-8")
+    (tmp_path / "fora.json").write_text(dados, encoding="utf-8")
+    return raiz
+
+
+def _estilos_invalidos(tmp_path):
+    return ["../fora", "../../algo", "sub/dir", "a\b", "Maiusculo", "", str(tmp_path / "fora"), "..", "snes-diurno/"]
+
+
+def test_gerar_e_revisar_recusam_nome_de_estilo_com_caminho(tmp_path):
+    raiz = _preparar_estilos(tmp_path)
+    (tmp_path / "algo.json").write_text('{"base": "game-boy", "nome": "algo"}', encoding="utf-8")
+    servidor = criar_servidor(raiz)
+    for estilo in _estilos_invalidos(tmp_path):
+        erro, texto = chamar(servidor, "gerar", receita={**PEQUENA, "estilo": estilo})
+        assert erro and "nome de estilo" in texto, (estilo, texto)
+        erro, texto = chamar(servidor, "revisar", imagem="img.png", estilo=estilo)
+        assert erro and "nome de estilo" in texto, (estilo, texto)
+    assert not (raiz / "mcp.png").exists()
+
+
+def test_gerar_e_revisar_com_nome_valido_e_preset_de_usuario(tmp_path):
+    raiz = _preparar_estilos(tmp_path)
+    servidor = criar_servidor(raiz)
+    chamar(servidor, "registrar_estilo", estilo={"base": "game-boy"}, nome="meu-gb-18")
+    for estilo in ("game-boy", "meu-gb-18"):
+        erro, texto = chamar(servidor, "gerar", receita={**PEQUENA, "estilo": estilo})
+        assert not erro and f"estilo {estilo}" in texto, texto
+        erro, texto = chamar(servidor, "revisar", imagem="img.png", estilo=estilo)
+        assert not erro, texto
+
+
+def test_gerar_e_revisar_estilo_json_so_dentro_da_raiz(tmp_path):
+    raiz = _preparar_estilos(tmp_path)
+    servidor = criar_servidor(raiz)
+    erro, texto = chamar(servidor, "gerar", receita={**PEQUENA, "estilo": "dentro.json"})
+    assert not erro and "estilo de-arquivo" in texto
+    erro, texto = chamar(servidor, "revisar", imagem="img.png", estilo="dentro.json")
+    assert not erro, texto
+    for fora in ("../fora.json", str(tmp_path / "fora.json")):
+        erro, texto = chamar(servidor, "gerar", receita={**PEQUENA, "estilo": fora})
+        assert erro and "fora da raiz" in texto, texto
+        erro, texto = chamar(servidor, "revisar", imagem="img.png", estilo=fora)
+        assert erro and "fora da raiz" in texto, texto
+    # a `base` de um estilo dado como objeto também não escapa
+    erro, texto = chamar(servidor, "gerar", receita={**PEQUENA, "estilo": {"base": "../../algo"}})
+    assert erro and "nome de estilo" in texto
+    erro, texto = chamar(servidor, "gerar", receita={**PEQUENA, "estilo": {"base": str(tmp_path / "fora.json")}})
+    assert erro and "fora da raiz" in texto
+
+
+def test_carregar_estilo_valida_o_nome_para_a_cli_tambem(tmp_path):
+    for nome in ("../fora", "a/b", "A"):
+        with pytest.raises(ValueError, match="nome de estilo"):
+            carregar_estilo(nome)
+    assert carregar_estilo("game-boy").nome == "game-boy"
+    arquivo = tmp_path / "livre.json"  # fora do servidor, caminho .json continua valendo
+    arquivo.write_text('{"base": "game-boy", "nome": "livre"}', encoding="utf-8")
+    assert carregar_estilo(arquivo).nome == "livre"
+
+
+def test_nome_com_barras_nao_acha_arquivo_fora_da_pasta_de_presets(tmp_path, monkeypatch):
+    """Reproduz o furo: `../fora` procurava `<presets>/../fora.json` e lia o arquivo."""
+    presets = tmp_path / "presets"
+    presets.mkdir()
+    monkeypatch.setenv("PIXEL_ATELIER_ESTILOS", str(presets))
+    (tmp_path / "fora.json").write_text('{"base": "game-boy", "nome": "vazou"}', encoding="utf-8")
+    raiz = tmp_path / "raiz"
+    raiz.mkdir()
+    erro, texto = chamar(criar_servidor(raiz), "gerar", receita={**PEQUENA, "estilo": "../fora"})
+    assert erro and "nome de estilo" in texto and "vazou" not in texto
