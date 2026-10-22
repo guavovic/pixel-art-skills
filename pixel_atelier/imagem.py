@@ -9,12 +9,20 @@ from PIL import Image, ImageChops
 from PIL.PngImagePlugin import PngInfo
 
 MARCA_LACO = "pixel-atelier:laco"  # chave de texto no PNG que o `gerar` grava: "sim" ou "nao"
+MARCA_ESCALA = "pixel-atelier:escala"  # no composto ampliado: quantas vezes ("3")
+BLOCO_MAX = 16  # sem marca, bloco maior que isso é arte chapada, não ampliada
+ACASO = 65536  # sem marca, o bloco N vale se N elevado ao número de trocas passa disso (acaso de 1 em 65536)
 
 
-def gravar_png(imagem: Image.Image, destino: Path, laco: bool) -> None:
-    """Grava o PNG com a marca de laço num bloco de texto (tEXt), que viaja junto com o arquivo."""
+def gravar_png(imagem: Image.Image, destino: Path, laco: bool, escala: int = 1) -> None:
+    """Grava o PNG com a marca de laço (e a de escala, se ampliado) em blocos de texto (tEXt).
+
+    As marcas viajam junto com o arquivo.
+    """
     info = PngInfo()
     info.add_text(MARCA_LACO, "sim" if laco else "nao")
+    if escala > 1:
+        info.add_text(MARCA_ESCALA, str(escala))
     imagem.save(destino, pnginfo=info)
 
 
@@ -23,6 +31,18 @@ def marca_de_laco(arquivo: "str | Path") -> bool | None:
     with Image.open(arquivo) as aberta:
         valor = aberta.info.get(MARCA_LACO)
     return {"sim": True, "nao": False}.get(valor) if isinstance(valor, str) else None
+
+
+def escala_indicada(arquivo: "str | Path") -> int | None:
+    """Ampliação que o arquivo declara: a marca do `gerar` ou o nome `<cena>-Nx.png`; None sem nenhuma."""
+    with Image.open(arquivo) as aberta:
+        valor = aberta.info.get(MARCA_ESCALA)
+    if isinstance(valor, str) and valor.isdigit() and int(valor) > 1:
+        return int(valor)
+    sufixo = Path(arquivo).stem.rpartition("-")[2]
+    if sufixo.endswith("x") and sufixo[:-1].isdigit() and int(sufixo[:-1]) > 1:
+        return int(sufixo[:-1])
+    return None
 
 
 def compor(camadas: Iterable[Image.Image]) -> Image.Image:
@@ -61,24 +81,38 @@ def abrir(imagem: "str | Path | Image.Image") -> Image.Image:
         return aberta.convert("RGBA")
 
 
-def escala_inteira(imagem: Image.Image) -> int:
-    """N quando a imagem é toda feita de blocos NxN (ampliada por vizinho mais próximo), senão 1."""
-    if len(imagem.getcolors(maxcolors=2) or []) == 1:
-        return 1  # cor única: qualquer N serviria
-    px = imagem.load()
+def trocas_de_cor(imagem: Image.Image) -> tuple[list[int], list[int]]:
+    """Colunas x onde alguma linha troca de cor (x - 1 para x) e linhas y onde alguma coluna troca."""
     largura, altura = imagem.size
-    n = 0
-    for linhas, colunas, ponto in ((altura, largura, lambda a, b: px[b, a]), (largura, altura, lambda a, b: px[a, b])):
-        for a in range(linhas):
-            inicio = 0
-            for b in range(1, colunas + 1):
-                if b == colunas or ponto(a, b) != ponto(a, b - 1):
-                    n = math.gcd(n, b - inicio)
-                    if n == 1:
-                        return 1
-                    inicio = b
-    # blocos grandes demais ou imagem que encolheria para menos de 16 pixels: é arte chapada, não ampliada
-    return n if n <= 16 and min(largura, altura) // n >= 16 else 1
+    xs: list[int] = []
+    ys: list[int] = []
+    if largura > 1:
+        diferenca = ImageChops.difference(imagem.crop((1, 0, largura, altura)), imagem.crop((0, 0, largura - 1, altura)))
+        xs = [x + 1 for x, troca in enumerate(diferenca.getprojection()[0]) if troca]
+    if altura > 1:
+        diferenca = ImageChops.difference(imagem.crop((0, 1, largura, altura)), imagem.crop((0, 0, largura, altura - 1)))
+        ys = [y + 1 for y, troca in enumerate(diferenca.getprojection()[1]) if troca]
+    return xs, ys
+
+
+def escala_inteira(imagem: Image.Image, indicada: int | None = None) -> int:
+    """N quando a imagem é toda feita de blocos NxN (ampliada por vizinho mais próximo), senão 1.
+
+    Toda troca de cor cai num múltiplo de N, nas duas direções. Com `indicada` (a marca do `gerar`
+    ou o `-Nx` do nome), basta isso, em qualquer tamanho. Sem ela, arte chapada engana: poucas
+    trocas (faixas de céu, retângulos de lado par) caem no passo do bloco por acaso. Cada posição
+    de troca diferente cai num múltiplo de N por acaso uma vez em N, então o bloco só vale com
+    troca nos dois eixos, N até `BLOCO_MAX` e N elevado ao número de trocas acima de `ACASO`.
+    """
+    xs, ys = trocas_de_cor(imagem)
+    if not xs and not ys:
+        return 1  # cor única: qualquer N serviria
+    n = math.gcd(imagem.width, imagem.height, *xs, *ys)
+    if indicada and indicada > 1 and n % indicada == 0:
+        return indicada
+    if n == 1 or n > BLOCO_MAX or not xs or not ys or n ** (len(xs) + len(ys)) < ACASO:
+        return 1
+    return n
 
 
 def reduzir(imagem: Image.Image, n: int) -> Image.Image:

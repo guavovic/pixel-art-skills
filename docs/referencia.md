@@ -129,6 +129,8 @@ python -m pixel_atelier revisar saida/vale.png --laco                    # forç
 
 O laço se confere sozinho: o `gerar` grava em cada PNG (composto, ampliado e camadas) um texto `pixel-atelier:laco` com `sim` ou `nao`, e o `revisar` confere a emenda quando a marca diz `sim`. `--laco` força a conferência numa imagem sem a marca (salva de novo por outro programa, por exemplo, que costuma descartar o texto do PNG); `laco=False` em Python, ou `false` na ferramenta MCP, pula.
 
+O ampliado também leva `pixel-atelier:escala` (o N do `ampliar`), e o `revisar` volta ao tamanho real por ela ou pelo `-Nx` do nome, em qualquer tamanho. Sem nenhuma das duas, a imagem só passa por ampliada com troca de cor nos dois eixos, todas no passo do bloco, e trocas bastantes para não ser acaso (arte chapada, com poucas trocas, é lida como veio).
+
 A receita `vale` acima, depois de `gerar`:
 
 ```

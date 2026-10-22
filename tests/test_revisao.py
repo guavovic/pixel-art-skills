@@ -9,6 +9,7 @@ from PIL import Image
 
 from pixel_atelier import Checagem, ampliar, carregar_estilo, compor, gerar, revisar
 from pixel_atelier.__main__ import main
+from pixel_atelier.imagem import escala_inteira, gravar_png
 from pixel_atelier.revisao import CONTRASTE_FRENTE, DICA_CONTRASTE, _contraste, _medida
 
 VAZIO = (0, 0, 0, 0)
@@ -349,6 +350,39 @@ def test_escala_mista_e_imagem_ampliada():
     revisao = revisar(ampliar(cena, 3))
     assert revisao.escala == 3 and (revisao.largura, revisao.altura) == (64, 64)
     assert "ampliada 3x" in revisao.resumo().splitlines()[0]
+
+
+def test_arte_chapada_nao_passa_por_ampliada():
+    """Faixas de céu de altura par e um retângulo: tudo cai no passo 2 por acaso, mas é tamanho real."""
+    chapada = chapa(64, 64, cinza(200))
+    y = 0
+    for i, altura in enumerate((4, 6, 8, 10, 6, 4)):
+        chapada.paste(cinza(60 + 20 * i), (0, y, 64, y + altura))
+        y += altura
+    chapada.paste(cinza(30), (20, 30, 44, 64))
+    assert escala_inteira(chapada) == 1
+    assert revisar(chapada).escala == 1
+
+
+def test_ampliada_pequena_pela_marca_ou_pelo_nome(tmp_path):
+    sprite = ruido(10, 6, seed=4)  # menor que 16 pixels por lado: sem marca não dá para ter certeza
+    grande = ampliar(sprite, 4)
+    gravar_png(grande, tmp_path / "heroi.png", laco=False, escala=4)
+    grande.save(tmp_path / "heroi-4x.png")
+    for arquivo in ("heroi.png", "heroi-4x.png"):
+        revisao = revisar(tmp_path / arquivo)
+        assert revisao.escala == 4 and (revisao.largura, revisao.altura) == (10, 6), arquivo
+    # marca que não bate com os blocos não vale: a imagem é revisada como veio
+    gravar_png(sprite, tmp_path / "errada.png", laco=False, escala=3)
+    assert revisar(tmp_path / "errada.png").escala == 1
+
+
+def test_gerar_marca_a_escala_do_ampliado(tmp_path):
+    receita = {"cena": "mini", "tamanho": [16, 12], "estilo": "snes-diurno", "ampliar": 3, "laco": False,
+               "camadas": [{"forma": "ceu"}, {"forma": "rocha", "quantidade": 1, "tamanho": [0.6, 0.8]}]}
+    gerar(receita, pasta=tmp_path)
+    revisao = revisar(tmp_path / "mini-3x.png")
+    assert revisao.escala == 3 and (revisao.largura, revisao.altura) == (16, 12)
 
 
 # --- composição repetida -------------------------------------------------------------------------

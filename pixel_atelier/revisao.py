@@ -79,7 +79,7 @@ from PIL import Image, ImageChops
 
 from .cor import distancia2, luminancia, rgb_para_hex
 from .estilo import Estilo, carregar_estilo
-from .imagem import abrir, compor, escala_inteira, marca_de_laco, reduzir, vizinho
+from .imagem import abrir, compor, escala_indicada, escala_inteira, marca_de_laco, reduzir, vizinho
 
 CORES_SPRITE = 16
 CORES_CENA = 64  # o SNES põe até 128 cores de fundo na tela (8 subpaletas de 16); 64 deixa folga sem virar foto
@@ -173,6 +173,10 @@ def _camadas_ao_lado(arquivo: Path) -> list[Path]:
         nome = base
     pasta = arquivo.parent / nome
     return sorted(pasta.glob("[0-9][0-9]-*.png")) if pasta.is_dir() else []
+
+
+def _indicada(imagem: "str | Path | Image.Image") -> int | None:
+    return escala_indicada(imagem) if isinstance(imagem, (str, Path)) else None
 
 
 def _ler_camadas(camadas: "str | Path | Sequence[str | Path | Image.Image]") -> list[tuple[str, Image.Image]]:
@@ -851,14 +855,14 @@ def revisar(
             if c.size != tamanho or (c.width * escala, c.height * escala) != original.size:
                 raise ValueError(f"camada {n} tem {c.width}x{c.height} e a imagem {original.width}x{original.height}")
     else:
-        escala = escala_inteira(original)
+        escala = escala_inteira(original, _indicada(imagem))
     alvo = reduzir(original, escala)
 
     sprite = alvo.getchannel("A").getextrema()[0] < 255 and not lidas
     # planos: (nome, a camada, o que está atrás dela)
     if fundo is not None:
         tras = abrir(fundo)
-        tras = reduzir(tras, escala_inteira(tras))
+        tras = reduzir(tras, escala_inteira(tras, _indicada(fundo)))
         if alvo.width > tras.width or alvo.height > tras.height:
             raise ValueError(f"sprite {alvo.width}x{alvo.height} maior que o fundo {tras.width}x{tras.height}")
         x, y = posicao or ((tras.width - alvo.width) // 2, (tras.height - alvo.height) // 2)
