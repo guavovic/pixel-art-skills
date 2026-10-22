@@ -36,6 +36,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import unicodedata
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, field
@@ -238,12 +239,41 @@ def estilos_so_em(raiz: Path) -> Iterator[None]:
         _RAIZ_DOS_JSON.reset(marca)
 
 
+def sugerir_nome(texto: str) -> str:
+    """Nome de preset parecido com o texto: `Floresta Nublada_3x` vira `floresta-nublada-3x`."""
+    sem_acento = unicodedata.normalize("NFKD", texto).encode("ascii", "ignore").decode()
+    return re.sub(r"[^a-z0-9]+", "-", sem_acento.lower()).strip("-")
+
+
 def validar_nome_de_estilo(nome: object, o_que: str = "estilo") -> str:
-    """O nome de um preset: minúsculo com hífens, sem barra nem `..` (nunca vira caminho)."""
-    if not isinstance(nome, str) or not NOME_VALIDO.match(nome):
-        raise ValueError(f"nome de {o_que} {nome!r} inválido: use o nome de um preset (minúsculo com hífens, "
-                         f"ex.: snes-diurno) ou o caminho de um arquivo .json")
-    return nome
+    """O nome de um preset: minúsculo com hífens, sem barra nem `..` (nunca vira caminho).
+
+    Se o nome inválido for o de um JSON copiado à mão para a pasta de presets, o erro diz como renomear.
+    """
+    if isinstance(nome, str) and NOME_VALIDO.match(nome):
+        return nome
+    mensagem = (f"nome de {o_que} {nome!r} inválido: use o nome de um preset (minúsculo com hífens, "
+                f"ex.: snes-diurno) ou o caminho de um arquivo .json")
+    copiado = _preset_fora_do_padrao(nome)
+    if copiado is not None:
+        mensagem += f"; {_renomeie(copiado)}"
+    raise ValueError(mensagem)
+
+
+def _preset_fora_do_padrao(nome: object) -> Path | None:
+    """O JSON da pasta de presets do usuário com esse nome fora do padrão, se existir.
+
+    Nome com barra ou `..` nem é procurado: o nome nunca vira caminho."""
+    if not isinstance(nome, str) or not nome or ".." in nome or any(c in nome for c in "/\\:"):
+        return None
+    arquivo = pasta_de_presets() / f"{nome}.json"
+    return arquivo if arquivo.is_file() else None
+
+
+def _renomeie(arquivo: Path) -> str:
+    sugestao = sugerir_nome(arquivo.stem) or "meu-estilo"
+    return (f"o preset {arquivo.name} em {arquivo.parent.as_posix()} tem nome fora do padrão e não carrega por nome: "
+            f"renomeie o arquivo para {sugestao}.json e use \"{sugestao}\"")
 
 
 def _arquivo_json_do_estilo(caminho: Path) -> Path:
@@ -277,17 +307,22 @@ def _arquivo_do_preset(nome: str):
 def listar_estilos() -> list[str]:
     """Nomes dos presets (do pacote e do usuário), em ordem alfabética."""
     nomes = {p.name[:-5] for p in _pasta_de_estilos().iterdir() if p.name.endswith(".json")}
-    if pasta_de_presets().is_dir():
-        nomes.update(p.stem for p in pasta_de_presets().glob("*.json"))
+    nomes.update(p.stem for p in _presets_do_usuario() if NOME_VALIDO.match(p.stem))
     return sorted(nomes)
 
 
+def _presets_do_usuario() -> list[Path]:
+    pasta = pasta_de_presets()
+    return sorted(pasta.glob("*.json")) if pasta.is_dir() else []
+
+
 def descrever_estilos() -> str:
-    """Uma linha por preset: o nome e, quando tem, a descrição."""
+    """Uma linha por preset: o nome e, quando tem, a descrição. JSON com nome fora do padrão vira aviso."""
     linhas = []
     for nome in listar_estilos():
         descricao = dados_do_estilo(nome).get("descricao")
         linhas.append(f"{nome}: {descricao}" if descricao else nome)
+    linhas.extend(f"aviso: {_renomeie(p)}" for p in _presets_do_usuario() if not NOME_VALIDO.match(p.stem))
     return "\n".join(linhas)
 
 
@@ -319,7 +354,12 @@ def dados_do_estilo(estilo: "str | Path | dict[str, Any] | Estilo", _nivel: int 
     else:
         arquivo = _arquivo_do_preset(validar_nome_de_estilo(str(estilo)))
     if arquivo is None:
-        raise KeyError(f"estilo {str(estilo)!r} não existe; os que existem: {', '.join(listar_estilos())}")
+        mensagem = f"estilo {str(estilo)!r} não existe; os que existem: {', '.join(listar_estilos())}"
+        parecidos = [p for p in _presets_do_usuario()
+                     if not NOME_VALIDO.match(p.stem) and sugerir_nome(p.stem) == estilo]
+        if parecidos:
+            mensagem += f"; {_renomeie(parecidos[0])}"
+        raise KeyError(mensagem)
     return dados_do_estilo(json.loads(arquivo.read_text(encoding="utf-8")), _nivel + 1)
 
 

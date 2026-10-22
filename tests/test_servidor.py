@@ -175,7 +175,7 @@ def test_ref_grava_o_preset_e_responde_o_resumo(tmp_path):
 @pytest.mark.parametrize("argumentos, mensagem", [
     ({"imagem": "../fora.png", "nome": "fora"}, "fora da raiz"),
     ({"imagem": "nada.png", "nome": "nada"}, "'nada.png' não existe"),
-    ({"imagem": "ref.png", "nome": "x", "base": "../../fora"}, "nome de um preset ou um arquivo .json"),
+    ({"imagem": "ref.png", "nome": "x", "base": "../../fora"}, "preset não gravado: nome de base '../../fora' inválido"),
     ({"imagem": "ref.png", "nome": "x", "base": "../fora.json"}, "fora da raiz"),
     ({"imagem": "ref.png", "nome": "Nome Ruim"}, "preset não gravado: nome de preset"),
     ({"imagem": "ref.png", "nome": "snes-diurno"}, "vem com o pacote"),

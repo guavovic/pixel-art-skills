@@ -27,7 +27,7 @@ from mcp.types import ToolAnnotations
 from pydantic import Field
 
 from . import __version__
-from .estilo import NOME_VALIDO, descrever_estilos, estilos_so_em, registrar_estilo
+from .estilo import descrever_estilos, estilos_so_em, registrar_estilo
 from .gerador import gerar
 from .guia import capitulo as ler_capitulo
 from .receita import ErroDeReceita, descrever_formas
@@ -153,12 +153,8 @@ def criar_servidor(raiz: str | Path | None = None) -> MCPServer:
         arquivo = dentro_da_raiz(raiz, imagem, "imagem")
         if not arquivo.is_file():
             raise ToolError(f"arquivo {imagem!r} não existe dentro da raiz {raiz.as_posix()}")
-        if base.endswith(".json"):
-            estilo_base: str | Path = dentro_da_raiz(raiz, base, "base")
-        elif NOME_VALIDO.match(base):
-            estilo_base = base
-        else:
-            raise ToolError(f"base {base!r} deve ser o nome de um preset ou um arquivo .json")
+        # nome de base inválido cai na validação do `ref`, com a mesma mensagem do gerar e do revisar
+        estilo_base: str | Path = dentro_da_raiz(raiz, base, "base") if base.endswith(".json") else base
         try:
             with estilos_so_em(raiz):
                 return ref(arquivo, nome, base=estilo_base, cores=cores, sobrescrever=sobrescrever).resumo()
