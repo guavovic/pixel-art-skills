@@ -1,6 +1,6 @@
 {
   "cena": "metroidvania-noturno",
-  "descricao": "A cena de montar_cena.py à noite: lua, nuvens em fiapo, névoa baixa e raios na frente.",
+  "descricao": "A cena de montar_cena.py à noite: lua, nuvens em fiapo, montanhas mais longe, névoa baixa e raios na frente.",
   "tamanho": [320, 180],
   "estilo": "metroidvania-noturno",
   "ampliar": 3,
@@ -8,7 +8,7 @@
   "camadas": [
     {"forma": "ceu", "seed": 1, "horizonte": 0.8, "estrelas": 70, "astro": "lua", "posicao": [0.7, 0.22]},
     {"forma": "nuvem", "seed": 2, "profundidade": 0.95, "quantidade": 4, "faixa": [0.12, 0.34], "tamanho": [0.3, 0.5], "tipo": "fiapo", "densidade": 0.3},
-    {"forma": "terreno", "nome": "montanhas", "seed": 3, "profundidade": 0.85, "base": 0.62, "amplitude": 0.3, "aspereza": 0.45, "papel": "pedra", "superficie": "neve", "pedrinhas": 0, "escurecer": false},
+    {"forma": "terreno", "nome": "montanhas", "seed": 3, "profundidade": 0.95, "base": 0.62, "amplitude": 0.3, "aspereza": 0.45, "papel": "pedra", "superficie": "neve", "pedrinhas": 0, "escurecer": false},
     {"forma": "arvore", "nome": "pinheiros", "seed": 4, "profundidade": 0.65, "tipo": "pinheiro", "base": 0.7, "tamanho": [0.14, 0.24], "espaco": [0.5, 0.9]},
     {"forma": "nevoa", "seed": 5, "profundidade": 0.55, "centro": 0.66, "espessura": 0.1, "densidade": 0.4},
     {"forma": "arvore", "nome": "mata", "seed": 6, "profundidade": 0.35, "tipo": "mista", "base": 0.8, "tamanho": [0.3, 0.48], "espaco": [0.8, 1.6]},
