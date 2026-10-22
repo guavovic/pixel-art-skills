@@ -111,7 +111,7 @@ A cena inteira cabe num JSON curto. Só `camadas` é obrigatório; as camadas v�
 | `estilo` | `"snes-diurno"` | preset, caminho de JSON ou dicionário de estilo (aceita `base`) |
 | `laco` | `true` | laço horizontal; com ele a largura precisa ser múltipla de 8 |
 | `seed` | `0` | sorteia as camadas sem `seed` própria; camada com `seed` fica fixa |
-| `ampliar` | `1` | grava também o composto ampliado N vezes |
+| `ampliar` | `1` | grava também o composto ampliado N vezes (de 1 a 16; o ampliado fica com no máximo 4096 por lado) |
 | `saida` | `"tudo"` | `"tudo"`, `"composto"` ou `"camadas"` |
 | `camadas` | obrigatório | `forma`, `nome` opcional e os parâmetros da forma |
 

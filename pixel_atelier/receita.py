@@ -49,6 +49,7 @@ COMUNS = ("seed", "laco", "deslocamento")  # parâmetros que toda forma aceita e
 TAMANHO_MAXIMO = 4096
 SEED_DERIVADA = 100_000  # seeds derivadas ficam curtas, fáceis de copiar para fixar uma camada
 AMPLIAR_MAXIMO = 16
+AMPLIADO_MAXIMO = 4096  # lado máximo do composto depois de `ampliar`, para não estourar a memória
 NOME_VALIDO = re.compile(r"^[a-z0-9][a-z0-9_-]*$")
 PADRAO = {"cena": "cena", "tamanho": [320, 180], "estilo": "snes-diurno", "laco": True, "seed": 0,
           "ampliar": 1, "saida": "tudo"}
@@ -217,6 +218,9 @@ def validar_receita(fonte: "str | Path | dict[str, Any]") -> Receita:
     ampliar = r["ampliar"]
     if not isinstance(ampliar, int) or isinstance(ampliar, bool) or not 1 <= ampliar <= AMPLIAR_MAXIMO:
         erros.append(f"ampliar deve ser inteiro de 1 a {AMPLIAR_MAXIMO}, veio {ampliar!r}")
+    elif largura and max(largura, altura) * ampliar > AMPLIADO_MAXIMO:
+        erros.append(f"a imagem ampliada ficaria com {largura * ampliar}x{altura * ampliar} pixels e o máximo é "
+                     f"{AMPLIADO_MAXIMO} por lado; reduza ampliar ou tamanho")
     if r["saida"] not in SAIDAS:
         erros.append(f"saida deve ser um de {', '.join(SAIDAS)}, veio {r['saida']!r}")
     if not isinstance(r.get("descricao", ""), str):
