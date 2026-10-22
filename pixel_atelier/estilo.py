@@ -4,9 +4,10 @@ Um estilo é só dado (um dicionário ou um JSON em `pixel_atelier/estilos/`). A
 por papel (`folha`, `pedra`, `terra`...) e por profundidade, e o estilo responde com cores da
 paleta dele. Trocar de estilo não muda nenhuma forma.
 
-Formato do dicionário (só `nome`, `ceu`, `atmosfera`, `luz` e `rampas` são obrigatórios):
+Formato do dicionário (sem `base`, só `nome`, `ceu`, `atmosfera`, `luz` e `rampas` são obrigatórios):
 
     {
+      "base": "snes-diurno",           # opcional: parte de um preset e troca só os campos dados
       "nome": "meu-estilo",
       "descricao": "texto curto",
       "ceu": ["#topo", "...", "#horizonte"],
@@ -33,6 +34,8 @@ Formato do dicionário (só `nome`, `ceu`, `atmosfera`, `luz` e `rampas` são ob
 from __future__ import annotations
 
 import json
+import os
+import re
 from dataclasses import dataclass, field
 from importlib import resources
 from pathlib import Path
@@ -209,35 +212,108 @@ class Estilo:
 
 
 # --- presets ---------------------------------------------------------------------------------
+#
+# Preset é um estilo com nome. Os do pacote ficam em `pixel_atelier/estilos/`; os registrados com
+# `registrar_estilo` ficam na pasta de presets do usuário (variável PIXEL_ATELIER_ESTILOS ou
+# ~/.pixel-atelier/estilos). Onde se aceita um dicionário de estilo, vale `"base": "nome"` para
+# partir de um preset e mudar só alguns campos (as rampas se juntam papel a papel).
+
+VARIAVEL_PRESETS = "PIXEL_ATELIER_ESTILOS"
+NOME_VALIDO = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
+
 
 def _pasta_de_estilos():
     return resources.files("pixel_atelier") / "estilos"
 
 
+def pasta_de_presets() -> Path:
+    """Pasta dos presets registrados pelo usuário."""
+    return Path(os.environ.get(VARIAVEL_PRESETS) or Path.home() / ".pixel-atelier" / "estilos")
+
+
+def _arquivo_do_preset(nome: str):
+    for pasta in (_pasta_de_estilos(), pasta_de_presets()):
+        arquivo = pasta / f"{nome}.json"
+        if arquivo.is_file():
+            return arquivo
+    return None
+
+
 def listar_estilos() -> list[str]:
-    """Nomes dos estilos que vêm com o pacote, em ordem alfabética."""
-    return sorted(p.name[:-5] for p in _pasta_de_estilos().iterdir() if p.name.endswith(".json"))
+    """Nomes dos presets (do pacote e do usuário), em ordem alfabética."""
+    nomes = {p.name[:-5] for p in _pasta_de_estilos().iterdir() if p.name.endswith(".json")}
+    if pasta_de_presets().is_dir():
+        nomes.update(p.stem for p in pasta_de_presets().glob("*.json"))
+    return sorted(nomes)
+
+
+def dados_do_estilo(estilo: "str | Path | dict[str, Any] | Estilo", _nivel: int = 0) -> dict[str, Any]:
+    """Dicionário cru do estilo (antes de resolver a paleta), já com a `base` aplicada.
+
+    Aceita o nome de um preset, o caminho de um JSON, um dicionário ou um `Estilo`.
+    """
+    if _nivel > 8:
+        raise ValueError("estilo com base em ciclo (uma base aponta de volta para outra)")
+    if isinstance(estilo, Estilo):
+        return dict(estilo.origem) if estilo.origem else estilo.para_dicionario()
+    if isinstance(estilo, dict):
+        if "base" not in estilo:
+            return dict(estilo)
+        dados = dados_do_estilo(estilo["base"], _nivel + 1)
+        for chave, valor in estilo.items():
+            if chave == "base":
+                continue
+            if chave == "rampas" and isinstance(valor, dict) and isinstance(dados.get("rampas"), dict):
+                dados["rampas"] = {**dados["rampas"], **valor}
+            else:
+                dados[chave] = valor
+        return dados
+    if not isinstance(estilo, (str, Path)):
+        raise TypeError(f"estilo deve ser nome, caminho, dicionário ou Estilo, veio {type(estilo).__name__}")
+    caminho = Path(estilo)
+    arquivo = caminho if caminho.suffix == ".json" and caminho.is_file() else _arquivo_do_preset(str(estilo))
+    if arquivo is None:
+        raise KeyError(f"estilo {str(estilo)!r} não existe; os que existem: {', '.join(listar_estilos())}")
+    return dados_do_estilo(json.loads(arquivo.read_text(encoding="utf-8")), _nivel + 1)
 
 
 def carregar_estilo(estilo: "str | Path | dict[str, Any] | Estilo") -> Estilo:
-    """Aceita o nome de um preset, o caminho de um JSON, um dicionário ou um `Estilo` pronto."""
+    """Aceita o nome de um preset, o caminho de um JSON, um dicionário (com ou sem `base`) ou um `Estilo` pronto."""
     if isinstance(estilo, Estilo):
         return estilo
-    if isinstance(estilo, dict):
-        return Estilo.de_dicionario(estilo)
-    caminho = Path(estilo)
-    if caminho.suffix == ".json" and caminho.exists():
-        return Estilo.de_dicionario(json.loads(caminho.read_text(encoding="utf-8")))
-    arquivo = _pasta_de_estilos() / f"{estilo}.json"
-    if not arquivo.is_file():
-        raise KeyError(f"estilo {estilo!r} não existe; os que existem: {', '.join(listar_estilos())}")
-    return Estilo.de_dicionario(json.loads(arquivo.read_text(encoding="utf-8")))
+    return Estilo.de_dicionario(dados_do_estilo(estilo))
+
+
+def registrar_estilo(estilo: "str | Path | dict[str, Any] | Estilo", nome: str | None = None, *,
+                     sobrescrever: bool = False) -> Path:
+    """Guarda o estilo como preset com nome, na pasta de presets do usuário. Devolve o arquivo gravado.
+
+    Grava o dicionário cru (com a `base` já aplicada), para o preset continuar fácil de ajustar.
+    Os nomes do pacote são reservados; um preset do usuário só é trocado com `sobrescrever=True`.
+    """
+    dados = dados_do_estilo(estilo)
+    nome = nome or dados.get("nome")
+    if not isinstance(nome, str) or not NOME_VALIDO.match(nome):
+        raise ValueError(f"nome de preset deve ser minúsculo com hífens (ex.: floresta-nublada), veio {nome!r}")
+    dados["nome"] = nome
+    Estilo.de_dicionario(dados)  # valida antes de gravar
+    if (_pasta_de_estilos() / f"{nome}.json").is_file():
+        raise ValueError(f"o preset {nome!r} vem com o pacote; escolha outro nome")
+    destino = pasta_de_presets() / f"{nome}.json"
+    if destino.exists() and not sobrescrever:
+        raise ValueError(f"o preset {nome!r} já existe em {destino}; use sobrescrever para trocar")
+    destino.parent.mkdir(parents=True, exist_ok=True)
+    _gravar_json(dados, destino)
+    return destino
 
 
 def salvar_estilo(estilo: Estilo, caminho: str | Path) -> Path:
     """Grava o estilo resolvido em JSON (UTF-8, LF)."""
-    destino = Path(caminho)
+    return _gravar_json(estilo.para_dicionario(), Path(caminho))
+
+
+def _gravar_json(dados: dict[str, Any], destino: Path) -> Path:
     with open(destino, "w", encoding="utf-8", newline="\n") as arquivo:
-        json.dump(estilo.para_dicionario(), arquivo, ensure_ascii=False, indent=2)
+        json.dump(dados, arquivo, ensure_ascii=False, indent=2)
         arquivo.write("\n")
     return destino
