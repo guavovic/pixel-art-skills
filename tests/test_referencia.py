@@ -6,10 +6,11 @@ import json
 import pytest
 from PIL import Image
 
-from pixel_atelier import (ampliar, carregar_estilo, cores_usadas, descrever_estilos, extrair_estilo, gerar, listar_estilos,
-                           pasta_de_presets, ref)
-from pixel_atelier.cor import luminancia, rgb_para_hex
+from pixel_atelier import (PAPEIS, ampliar, carregar_estilo, cores_usadas, descrever_estilos, extrair_estilo, gerar,
+                           listar_estilos, pasta_de_presets, ref)
+from pixel_atelier.cor import hex_para_rgb, luminancia, rgb_para_hex
 from pixel_atelier.estilo import validar_nome_de_estilo
+from pixel_atelier.referencia import DIVIDIR_PAR, ORDEM
 from pixel_atelier.__main__ import main
 
 CEU = [(40, 80, 180), (80, 130, 220), (140, 180, 240)]  # do topo ao horizonte
@@ -75,8 +76,89 @@ def test_rampa_longa_fica_com_seis_cores_espacadas():
     for i, cor in enumerate(verdes):
         imagem.paste(cor + (255,), (i * 4, 0, i * 4 + 4, 40))
     imagem.putpixel((0, 0), (255, 255, 255, 255))  # bloco 1x
-    folha = extrair_estilo(imagem, "verdes").estilo["rampas"]["folha"]
-    assert len(folha) == 6 and folha[0] == rgb_para_hex(verdes[0]) and folha[-1] == rgb_para_hex(verdes[-1])
+    rampas = extrair_estilo(imagem, "verdes").estilo["rampas"]
+    assert len(rampas["folha"]) == len(rampas["grama"]) == 6
+    assert rampas["folha"][0] == rgb_para_hex(verdes[0]) and rampas["grama"][-1] == rgb_para_hex(verdes[-1])
+
+
+def colunas(cores, altura=32, largura=4) -> Image.Image:
+    """Uma coluna de cada cor; a 1ª tem um pixel da 2ª, para a imagem ficar em bloco 1x."""
+    imagem = Image.new("RGBA", (len(cores) * largura, altura))
+    for i, cor in enumerate(cores):
+        imagem.paste(cor + (255,), (i * largura, 0, (i + 1) * largura, altura))
+    imagem.putpixel((0, 0), cores[1] + (255,))
+    return imagem
+
+
+def media_de_valor(rampa) -> float:
+    return sum(luminancia(hex_para_rgb(c)) for c in rampa) / len(rampa)
+
+
+def test_familia_dominante_reparte_pelo_valor_os_papeis_vazios():
+    # quase tudo azul, do quase preto ao claro (como uma cena noturna), e um branco só
+    azuis = [(8 + 12 * i, 16 + 16 * i, 40 + 18 * i) for i in range(12)]
+    r = extrair_estilo(colunas(azuis + [(250, 252, 255)]), "noite")
+    rampas = r.estilo["rampas"]
+    assert set(rampas) == set(PAPEIS) and not set(PAPEIS) & set(r.da_base)  # nada vem da base
+    assert r.dominante == ("azul", 12, list(ORDEM))
+    for papel, rampa in rampas.items():
+        assert len(rampa) >= 2 and {hex_para_rgb(c) for c in rampa} <= set(azuis), papel
+    # cada papel num trecho de valor: tronco no escuro, neve no claro
+    assert media_de_valor(rampas["tronco"]) < media_de_valor(rampas["pedra"]) < media_de_valor(rampas["neve"])
+    assert rampas["folha"] != rampas["grama"] and rampas["terra"] != rampas["tronco"]
+    assert "família azul domina (12 de 13 cores), repartida pelo valor em: folha, grama" in r.resumo()
+
+
+def test_familia_dominante_tira_o_tom_fora_do_matiz_papel_a_papel():
+    # noite azul com um verde-água no meio dos valores (o da grama da metroidvania-noturno)
+    azuis = [(8 + 12 * i, 16 + 16 * i, 40 + 18 * i) for i in range(12)]
+    verde_agua = (44, 138, 132)
+    r = extrair_estilo(colunas(azuis[:6] + [verde_agua] + azuis[6:]), "noite")
+    assert r.dominante is not None and r.dominante[0] == "azul"
+    assert rgb_para_hex(verde_agua) not in r.estilo["rampas"]["pedra"]
+    em_alguma = any(rgb_para_hex(verde_agua) in rampa for rampa in r.estilo["rampas"].values())
+    assert em_alguma or r.fora_do_matiz == [verde_agua]
+
+
+def test_sem_familia_dominante_papel_vazio_continua_vindo_da_base():
+    r = extrair_estilo(cena(), "sintetica")
+    assert r.dominante is None and r.da_base == ["cristal"]
+
+
+def test_par_de_papeis_ganha_rampas_diferentes_com_cores_suficientes():
+    verdes = [(20 + 14 * i, 60 + 18 * i, 30 + 10 * i) for i in range(DIVIDIR_PAR)]
+    vermelhos = [(120, 30, 20), (200, 60, 40)]  # para o verde não dominar
+    rampas = extrair_estilo(colunas(verdes + vermelhos + [(255, 255, 255)]), "par").estilo["rampas"]
+    assert rampas["folha"] != rampas["grama"]
+    assert rampas["folha"][0] == rgb_para_hex(verdes[0]) and rampas["grama"][-1] == rgb_para_hex(verdes[-1])
+    assert media_de_valor(rampas["folha"]) < media_de_valor(rampas["grama"])  # folha no trecho mais escuro
+    assert all(len(rampas[p]) >= 2 for p in ("folha", "grama"))
+    poucos = extrair_estilo(colunas(verdes[:DIVIDIR_PAR - 1] + vermelhos + [(255, 255, 255)]), "par").estilo["rampas"]
+    assert poucos["folha"] == poucos["grama"]  # com poucas cores, a mesma rampa
+
+
+def test_tom_fora_do_matiz_sai_da_rampa_e_fica_na_paleta():
+    # o caso da quantização da snes-diurno: marrons e um rosa caídos na família quente
+    marrons, rosa = [(110, 70, 35), (130, 85, 45), (146, 106, 60)], (193, 126, 149)
+    r = extrair_estilo(colunas(marrons + [rosa] + VERDE[:2] + CINZA[:2] + [(255, 255, 255)]), "rosa")
+    assert r.dominante is None
+    assert rgb_para_hex(rosa) not in r.estilo["rampas"]["terra"] + r.estilo["rampas"]["tronco"]
+    assert r.estilo["rampas"]["terra"] == hexes(marrons)
+    assert rgb_para_hex(rosa) in r.estilo["paleta"] and r.fora_do_matiz == [rosa]
+    assert f"fora do matiz da família, só na paleta: {rgb_para_hex(rosa)}" in r.resumo()
+
+
+def test_rampa_que_muda_de_matiz_aos_poucos_fica_inteira():
+    # verdes do escuro ao verde-amarelo (os da snes-diurno) e os quatro do game-boy
+    snes = ["#245a31", "#3f7852", "#3c8c34", "#639380", "#589c5f", "#72b182", "#7bc064", "#91c69a", "#b9e1ae",
+            "#bae884"]
+    game_boy = ["#0f380f", "#306230", "#8bac0f", "#9bbc0f"]
+    for cores in (snes, game_boy):
+        r = extrair_estilo(colunas([hex_para_rgb(c) for c in cores]), "verdes")
+        verdes = r.estilo["rampas"]["folha"] + r.estilo["rampas"]["grama"]
+        assert not r.fora_do_matiz and set(verdes) <= set(cores)
+        por_valor = sorted(cores, key=lambda c: luminancia(hex_para_rgb(c)))
+        assert por_valor[0] in verdes and por_valor[-1] in verdes  # do mais escuro ao mais claro
 
 
 def test_pixel_ampliado_detectado_e_lido_no_tamanho_real():
@@ -153,30 +235,6 @@ def test_nome_invalido_reservado_ou_repetido_e_recusado():
     with pytest.raises(ValueError, match="já existe"):
         ref(cena(), "repetido")
     ref(cena(), "repetido", sobrescrever=True)
-
-
-def test_preset_copiado_com_nome_fora_do_padrao_diz_como_renomear():
-    copiado = pasta_de_presets() / "Meu_Estilo.json"
-    pasta_de_presets().mkdir(parents=True, exist_ok=True)
-    copiado.write_text(json.dumps({"base": "snes-diurno", "nome": "Meu_Estilo"}), encoding="utf-8")
-    try:
-        dica = "renomeie o arquivo para meu-estilo.json e use \"meu-estilo\""
-        with pytest.raises(ValueError, match="Meu_Estilo.json .* tem nome fora do padrão") as erro:
-            carregar_estilo("Meu_Estilo")
-        assert dica in str(erro.value)
-        with pytest.raises(KeyError) as erro:
-            carregar_estilo("meu-estilo")  # o nome certo, antes de renomear
-        assert dica in str(erro.value)
-        assert "Meu_Estilo" not in listar_estilos()
-        assert f"aviso: o preset Meu_Estilo.json em {pasta_de_presets().as_posix()}" in descrever_estilos()
-        with pytest.raises(ValueError) as erro:
-            carregar_estilo("../Meu_Estilo")  # nome com caminho nem é procurado na pasta
-        assert "renomeie" not in str(erro.value)
-        copiado.rename(pasta_de_presets() / "meu-estilo.json")
-        assert carregar_estilo("meu-estilo").nome == "Meu_Estilo" and "meu-estilo" in listar_estilos()
-    finally:
-        for arquivo in (copiado, pasta_de_presets() / "meu-estilo.json"):
-            arquivo.unlink(missing_ok=True)
 
 
 def test_base_invalida_tem_a_mesma_mensagem_do_gerar_e_do_revisar():

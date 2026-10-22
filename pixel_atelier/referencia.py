@@ -18,6 +18,14 @@ O que sai da imagem:
   rampa, do escuro ao claro (até `RAMPA_MAX` cores, espaçadas pelo valor), e vai para os papéis:
   verde → folha e grama; quente (vermelho, laranja, marrom) → terra e tronco; neutra escura →
   pedra; neutra clara → nuvem, névoa e neve; roxo → cristal. Azul fica só na paleta.
+- par de papéis: família com `DIVIDIR_PAR` cores ou mais dá rampas diferentes para folha e grama
+  (e para tronco e terra): folha e tronco no trecho mais escuro, grama e terra no mais claro.
+- tom fora do matiz: numa família cromática, o tom cujo croma de lado (CIELAB, em relação ao matiz
+  médio da família pesado pelos pixels) passa de `DESVIO_DE_MATIZ` sai da rampa e fica só na paleta,
+  como o rosa que a quantização põe entre os marrons. Rampa que muda de matiz aos poucos fica inteira.
+- família dominante: com `DOMINANTE` da paleta ou mais numa família só (cena noturna toda azul,
+  game-boy todo verde), os papéis sem família vão para ela, cada um num trecho de valor (`JANELAS`:
+  tronco no escuro, neve no claro), e o tom fora do matiz sai papel a papel.
 - céu: em imagem opaca, a cor mais comum de cada linha do terço de cima, de cima para baixo (do
   topo ao horizonte, até `RAMPA_MAX` cores). A última, a do horizonte, vira a atmosfera. Sprite
   (com transparência) não tem céu.
@@ -26,14 +34,15 @@ O que sai da imagem:
   valor em cada rampa. Fica no bloco `referencia` do preset, só para consulta (o estilo ignora).
 
 O que a imagem não diz (sombreamento, contorno ligado ou não, direção da luz, largura das faixas,
-forças de atmosfera e luz, papel sem família) vem do estilo `base` (padrão `snes-diurno`). Como o
-preset fecha a `paleta` com as cores da referência, até o que vem do base é pintado só com elas.
-O preset é gravado como o `registrar_estilo` grava: na pasta de presets do usuário, com a base já
-aplicada.
+forças de atmosfera e luz, papel sem família quando nenhuma domina) vem do estilo `base` (padrão
+`snes-diurno`, mesma validação de nome do gerar e do revisar). Como o preset fecha a `paleta` com
+as cores da referência, até o que vem do base é pintado só com elas. O preset é gravado como o
+`registrar_estilo` grava: na pasta de presets do usuário, com a base já aplicada.
 """
 from __future__ import annotations
 
 import colorsys
+import math
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Sequence
@@ -61,6 +70,18 @@ PAPEIS_DA_FAMILIA = {
     "clara": ("nuvem", "nevoa", "neve"),
     "roxo": ("cristal",),
 }
+CINZAS = ("neutra", "clara")  # famílias sem matiz que conte
+# Tom de família cromática cujo croma de lado (no CIELAB, em relação ao matiz médio da família) passa
+# disso é tom estranho: sai da rampa e fica só na paleta. Na família dominante, vale em cada papel.
+DESVIO_DE_MATIZ = 20
+# Família com essas cores ou mais dá uma rampa para cada papel do par; abaixo, os dois dividem a rampa.
+DIVIDIR_PAR = 5
+JANELA_DO_PAR = {"folha": (0, 0.65), "tronco": (0, 0.65), "grama": (0.35, 1), "terra": (0.35, 1)}
+# Família com essa fração da paleta ou mais é repartida pelos papéis vazios, cada papel num trecho de
+# valor dela (0 a cor mais escura da família, 1 a mais clara).
+DOMINANTE = 0.6
+JANELAS = {"tronco": (0, 0.45), "terra": (0.1, 0.55), "folha": (0.15, 0.65), "pedra": (0.25, 0.7),
+           "grama": (0.35, 0.85), "cristal": (0.5, 1), "nuvem": (0.55, 1), "nevoa": (0.65, 1), "neve": (0.75, 1)}
 ORDEM = ("folha", "grama", "terra", "tronco", "pedra", "cristal", "nuvem", "nevoa", "neve")
 
 
@@ -96,6 +117,8 @@ class Referencia:
     estilo: dict[str, Any]  # o que vai para registrar_estilo
     avisos: list[str] = field(default_factory=list)
     destino: Path | None = None
+    fora_do_matiz: list[RGB] = field(default_factory=list)  # tom longe do matiz da família: só na paleta
+    dominante: tuple[str, int, list[str]] | None = None  # família, quantas cores, papéis repartidos pelo valor
 
     def resumo(self) -> str:
         """Texto curto para o agente: o preset, a paleta, as rampas e o contraste."""
@@ -115,6 +138,15 @@ class Referencia:
         linhas.append(f"valor: {self.valor[0]:.2f} a {self.valor[1]:.2f}, faixa {self.faixa:.2f} (p5 a p95)")
         linhas.append("rampas, do escuro ao claro (céu: do topo ao horizonte):")
         linhas.extend(f"  {r.linha()}" for r in self.rampas)
+        if self.dominante:
+            familia, quantas, papeis = self.dominante
+            linhas.append(f"família {familia} domina ({quantas} de {len(self.paleta)} cores), "
+                          f"repartida pelo valor em: {', '.join(papeis)}")
+        if self.fora_do_matiz:
+            tons = ", ".join(map(rgb_para_hex, self.fora_do_matiz[:6]))
+            resto = len(self.fora_do_matiz) - 6
+            tons += f" e mais {resto}" if resto > 0 else ""
+            linhas.append(f"fora do matiz da família, só na paleta: {tons}")
         if self.da_base:
             linhas.append(f"da base, só com cores da paleta: {', '.join(self.da_base)}")
         extra = f", atmosfera {rgb_para_hex(self.atmosfera)}" if self.atmosfera else ""
@@ -175,6 +207,111 @@ def _espacar(cores: Sequence[RGB], quantas: int) -> tuple[RGB, ...]:
     return tuple(cores[round(i * (len(cores) - 1) / (quantas - 1))] for i in range(quantas))
 
 
+def _ab(cor: RGB) -> tuple[float, float]:
+    """Os eixos a e b do CIELAB (D65): o plano da cor sem o valor, onde o ângulo é o matiz como o olho vê."""
+    def linear(c: float) -> float:
+        return c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4
+
+    def f(t: float) -> float:
+        return t ** (1 / 3) if t > 0.008856 else 7.787 * t + 16 / 116
+
+    r, g, b = (linear(c / 255) for c in cor)
+    x = f((0.4124 * r + 0.3576 * g + 0.1805 * b) / 0.95047)
+    y = f(0.2126 * r + 0.7152 * g + 0.0722 * b)
+    z = f((0.0193 * r + 0.1192 * g + 0.9505 * b) / 1.08883)
+    return 500 * (x - y), 200 * (y - z)
+
+
+def _separar_fora_do_matiz(cores: Sequence[RGB], pixels: dict[RGB, int]) -> tuple[list[RGB], list[RGB]]:
+    """Separa (dentro, fora). Sai o tom que se afasta do matiz médio das cores (pesado pelos pixels) mais
+    que `DESVIO_DE_MATIZ`, medido no CIELAB como a parte do croma de lado (croma vezes o seno da diferença
+    de matiz): o rosa que a quantização põe entre os marrons, o brilho de cristal no meio da terra. Rampa
+    que muda de matiz aos poucos (verde escuro ao verde-amarelo) fica inteira, e tom quase cinza também,
+    porque o matiz dele quase não aparece. Com menos de 3 cores nada sai; sobram sempre 2 ou mais."""
+    if len(cores) < 3:
+        return list(cores), []
+    planos = {c: _ab(c) for c in cores}
+    a = sum(pixels[c] * planos[c][0] for c in cores)
+    b = sum(pixels[c] * planos[c][1] for c in cores)
+    norma = math.hypot(a, b)
+    if norma == 0:
+        return list(cores), []
+    a, b = a / norma, b / norma
+    fora = []
+    for cor in cores:
+        ca, cb = planos[cor]
+        de_lado = abs(ca * b - cb * a)  # croma vezes o seno da diferença de matiz
+        if ca * a + cb * b < 0:  # matiz do lado oposto: todo o croma conta
+            de_lado = math.hypot(ca, cb)
+        if de_lado > DESVIO_DE_MATIZ:
+            fora.append(cor)
+    dentro = [c for c in cores if c not in fora]
+    return (dentro, fora) if len(dentro) >= 2 else (list(cores), [])
+
+
+def _janela(cores: Sequence[RGB], inicio: float, fim: float,
+            pixels: dict[RGB, int] | None = None) -> tuple[tuple[RGB, ...], list[RGB]]:
+    """(rampa, tons tirados). O trecho da família (já ordenada pelo valor) entre `inicio` e `fim` (0 a mais
+    escura, 1 a mais clara), com pelo menos 2 cores, espaçado até `RAMPA_MAX`. Com `pixels`, sem o tom fora
+    do matiz do trecho."""
+    ultimo = len(cores) - 1
+    baixo, alto = round(inicio * ultimo), round(fim * ultimo)
+    while alto - baixo + 1 < min(2, len(cores)):
+        if alto < ultimo:
+            alto += 1
+        else:
+            baixo -= 1
+    trecho, fora = list(cores[baixo:alto + 1]), []
+    if pixels is not None:
+        trecho, fora = _separar_fora_do_matiz(trecho, pixels)
+    return _espacar(trecho, RAMPA_MAX), fora
+
+
+def _rampas_por_papel(familias: dict[str, list[RGB]], dominante: str | None,
+                      pixels: dict[RGB, int]) -> tuple[dict[str, tuple[RGB, ...]], list[RGB]]:
+    """(rampa de cada papel, tons tirados por estarem fora do matiz).
+
+    Cada família com 2 cores ou mais vai para os papéis dela. O par (folha e grama, tronco e terra) de
+    família com `DIVIDIR_PAR` cores ou mais ganha duas rampas: folha e tronco no trecho mais escuro. A
+    família dominante, quando há, vai também para os papéis que ficaram vazios, cada um no seu trecho de
+    valor (`JANELAS`), e o tom fora do matiz sai papel a papel (o verde-água sai da pedra azul, mas fica
+    no cristal)."""
+    por_papel: dict[str, tuple[RGB, ...]] = {}
+    tirados: list[RGB] = []
+
+    def rampa(familia: str, papel: str, inicio: float, fim: float) -> None:
+        filtro = pixels if familia == dominante and familia not in CINZAS else None
+        por_papel[papel], fora = _janela(familias[familia], inicio, fim, filtro)
+        tirados.extend(fora)
+
+    for familia, papeis in PAPEIS_DA_FAMILIA.items():
+        if len(familias.get(familia, ())) < 2:
+            continue
+        dividir = len(familias[familia]) >= DIVIDIR_PAR
+        for papel in papeis:
+            rampa(familia, papel, *(JANELA_DO_PAR[papel] if dividir and papel in JANELA_DO_PAR else (0, 1)))
+    if dominante:
+        for papel in ORDEM:
+            if papel not in por_papel:
+                rampa(dominante, papel, *JANELAS[papel])
+    return por_papel, tirados
+
+
+def _familia_dominante(familias: dict[str, list[RGB]], total: int) -> str | None:
+    """A família com `DOMINANTE` da paleta ou mais: referência quase toda de um matiz só."""
+    nome, cores = max(familias.items(), key=lambda par: len(par[1]))
+    return nome if len(cores) >= 3 and len(cores) >= DOMINANTE * total else None
+
+
+def _agrupar(por_papel: dict[str, tuple[RGB, ...]]) -> list[Rampa]:
+    """Papéis com a mesma rampa numa linha só, na ordem de `ORDEM`."""
+    grupos: dict[tuple[RGB, ...], list[str]] = {}
+    for papel in ORDEM:
+        if papel in por_papel:
+            grupos.setdefault(por_papel[papel], []).append(papel)
+    return [Rampa(tuple(papeis), cores) for cores, papeis in grupos.items()]
+
+
 def _percentil(contagem: Sequence[tuple[int, float]], p: float) -> float:
     """Percentil de valores com peso, na mesma regra do `revisar` (índice int(p * n))."""
     ordenados = sorted(contagem, key=lambda par: par[1])
@@ -230,9 +367,19 @@ def extrair_estilo(imagem: "str | Path | Image.Image", nome: str | None = None, 
     familias: dict[str, list[RGB]] = {}
     for cor in paleta:
         familias.setdefault(_familia(cor), []).append(cor)
-    rampas = [Rampa(papeis, _espacar(familias[f], RAMPA_MAX))
-              for f, papeis in PAPEIS_DA_FAMILIA.items() if len(familias.get(f, ())) >= 2]
-    rampas.sort(key=lambda r: ORDEM.index(r.papeis[0]))
+    pixels = {c: n for n, c in contagem}
+    dominante = _familia_dominante(familias, len(paleta))
+    fora_do_matiz = []
+    for nome_da_familia, cores_da_familia in familias.items():
+        if nome_da_familia not in CINZAS and nome_da_familia != dominante:  # a dominante se filtra em cada papel
+            familias[nome_da_familia], longe = _separar_fora_do_matiz(cores_da_familia, pixels)
+            fora_do_matiz.extend(longe)
+    por_papel, tirados = _rampas_por_papel(familias, dominante, pixels)
+    usadas = {c for r in por_papel.values() for c in r}
+    fora_do_matiz.extend(sem_repetir(c for c in tirados if c not in usadas))
+    proprios = {p for f, papeis in PAPEIS_DA_FAMILIA.items() if len(familias.get(f, ())) >= 2 for p in papeis}
+    repartidos = [p for p in ORDEM if p not in proprios] if dominante else []
+    rampas = _agrupar(por_papel)
 
     luz, contorno = paleta[-1], paleta[0]
     estilo: dict[str, Any] = {
@@ -242,7 +389,7 @@ def extrair_estilo(imagem: "str | Path | Image.Image", nome: str | None = None, 
         "paleta": [rgb_para_hex(c) for c in paleta],
         "luz": rgb_para_hex(luz),
         "contorno_cor": rgb_para_hex(contorno),
-        "rampas": {p: [rgb_para_hex(c) for c in r.cores] for r in rampas for p in r.papeis},
+        "rampas": {p: [rgb_para_hex(c) for c in por_papel[p]] for p in ORDEM if p in por_papel},
     }
     atmosfera = None
     ceu = _espacar(_ceu(alvo, paleta), RAMPA_MAX)
@@ -261,7 +408,8 @@ def extrair_estilo(imagem: "str | Path | Image.Image", nome: str | None = None, 
     return Referencia(nome=nome, arquivo=arquivo, tamanho_original=original.size, escala=escala, tamanho=alvo.size,
                       cores_na_imagem=na_imagem, paleta=paleta, rampas=rampas, da_base=da_base, luz=luz,
                       contorno=contorno, atmosfera=atmosfera, valor=valor, faixa=faixa, base=str(base),
-                      estilo=estilo, avisos=avisos)
+                      estilo=estilo, avisos=avisos, fora_do_matiz=sorted(fora_do_matiz, key=luminancia),
+                      dominante=(dominante, len(familias[dominante]), repartidos) if repartidos else None)
 
 
 def ref(imagem: "str | Path | Image.Image", nome: str | None = None, *, base: "str | Path" = "snes-diurno",
