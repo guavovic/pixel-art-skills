@@ -21,6 +21,7 @@ from pixel_atelier import (
     validar_receita,
 )
 from pixel_atelier.__main__ import main
+from pixel_atelier.receita import CAMPOS
 
 EXEMPLOS = Path(__file__).resolve().parent.parent / "exemplos"
 
@@ -128,6 +129,13 @@ def test_descrever_formas_lista_toda_forma():
     for forma in ("ceu", "nuvem", "terreno", "arvore", "rocha", "cristal", "nevoa", "raios"):
         assert f"\n{forma}: " in texto
     assert '"pinheiro"|"copa"' in texto
+
+
+def test_descrever_formas_comeca_pelos_campos_da_receita():
+    primeira = descrever_formas().splitlines()[0]
+    for campo in CAMPOS:
+        assert f"{campo}=" in primeira or f"{campo} (" in primeira
+    assert '"tudo"|"composto"|"camadas"' in primeira
 
 
 # --- gerar -----------------------------------------------------------------------------------------

@@ -110,7 +110,7 @@ def test_revisar_responde_o_relatorio_em_texto(tmp_path):
 def test_descrever_formas_e_listar_estilos(tmp_path):
     servidor = criar_servidor(tmp_path)
     erro, formas = chamar(servidor, "descrever_formas")
-    assert not erro and formas.splitlines()[1].startswith("ceu: ") and "arvore: " in formas
+    assert not erro and formas.startswith("receita: ") and "\nceu: " in formas and "arvore: " in formas
     erro, estilos = chamar(servidor, "listar_estilos")
     assert not erro
     nomes = {linha.split(":")[0] for linha in estilos.splitlines()}

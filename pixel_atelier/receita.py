@@ -107,9 +107,18 @@ def parametros_da_forma(forma: str) -> dict[str, inspect.Parameter]:
     return dict(list(inspect.signature(FORMAS[forma]).parameters.items())[3:])
 
 
+def descrever_campos() -> str:
+    """Linha com os campos do topo da receita e o padrão de cada um."""
+    partes = [f"{campo}={json.dumps(valor, ensure_ascii=False)}" for campo, valor in PADRAO.items()]
+    partes[list(PADRAO).index("saida")] += " (" + "|".join(json.dumps(s) for s in SAIDAS) + ")"
+    return ("receita: " + ", ".join(partes) + ", descricao (texto livre), "
+            'camadas=[{"forma": ..., "nome": ..., parâmetros}] (obrigatório, do fundo para a frente)')
+
+
 def descrever_formas() -> str:
-    """Uma linha por forma com os parâmetros e o padrão de cada um. Serve de cola para escrever receitas."""
-    linhas = ["todas: seed (padrão: derivada da seed da receita), laco (padrão: o da receita), deslocamento=0"]
+    """Campos da receita e uma linha por forma com os parâmetros e o padrão. Serve de cola para escrever receitas."""
+    linhas = [descrever_campos(),
+              "todas: seed (padrão: derivada da seed da receita), laco (padrão: o da receita), deslocamento=0"]
     for forma in FORMAS:
         partes = []
         for nome, p in parametros_da_forma(forma).items():
