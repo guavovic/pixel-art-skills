@@ -9,6 +9,7 @@ from PIL import Image
 from pixel_atelier import (ampliar, carregar_estilo, cores_usadas, descrever_estilos, extrair_estilo, gerar, listar_estilos,
                            pasta_de_presets, ref)
 from pixel_atelier.cor import luminancia, rgb_para_hex
+from pixel_atelier.estilo import validar_nome_de_estilo
 from pixel_atelier.__main__ import main
 
 CEU = [(40, 80, 180), (80, 130, 220), (140, 180, 240)]  # do topo ao horizonte
@@ -152,6 +153,40 @@ def test_nome_invalido_reservado_ou_repetido_e_recusado():
     with pytest.raises(ValueError, match="já existe"):
         ref(cena(), "repetido")
     ref(cena(), "repetido", sobrescrever=True)
+
+
+def test_preset_copiado_com_nome_fora_do_padrao_diz_como_renomear():
+    copiado = pasta_de_presets() / "Meu_Estilo.json"
+    pasta_de_presets().mkdir(parents=True, exist_ok=True)
+    copiado.write_text(json.dumps({"base": "snes-diurno", "nome": "Meu_Estilo"}), encoding="utf-8")
+    try:
+        dica = "renomeie o arquivo para meu-estilo.json e use \"meu-estilo\""
+        with pytest.raises(ValueError, match="Meu_Estilo.json .* tem nome fora do padrão") as erro:
+            carregar_estilo("Meu_Estilo")
+        assert dica in str(erro.value)
+        with pytest.raises(KeyError) as erro:
+            carregar_estilo("meu-estilo")  # o nome certo, antes de renomear
+        assert dica in str(erro.value)
+        assert "Meu_Estilo" not in listar_estilos()
+        assert f"aviso: o preset Meu_Estilo.json em {pasta_de_presets().as_posix()}" in descrever_estilos()
+        with pytest.raises(ValueError) as erro:
+            carregar_estilo("../Meu_Estilo")  # nome com caminho nem é procurado na pasta
+        assert "renomeie" not in str(erro.value)
+        copiado.rename(pasta_de_presets() / "meu-estilo.json")
+        assert carregar_estilo("meu-estilo").nome == "Meu_Estilo" and "meu-estilo" in listar_estilos()
+    finally:
+        for arquivo in (copiado, pasta_de_presets() / "meu-estilo.json"):
+            arquivo.unlink(missing_ok=True)
+
+
+def test_base_invalida_tem_a_mesma_mensagem_do_gerar_e_do_revisar():
+    for base in ("../fora", "Snes_Diurno", "pasta/estilo"):
+        with pytest.raises(ValueError) as erro_ref:
+            extrair_estilo(cena(), "x", base=base)
+        with pytest.raises(ValueError) as erro_estilo:
+            validar_nome_de_estilo(base, "base")
+        assert str(erro_ref.value) == str(erro_estilo.value)
+        assert str(erro_ref.value).startswith(f"nome de base {base!r} inválido: use o nome de um preset")
 
 
 def test_preset_copiado_com_nome_fora_do_padrao_diz_como_renomear():

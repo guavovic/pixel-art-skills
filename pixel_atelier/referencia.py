@@ -34,8 +34,6 @@ aplicada.
 from __future__ import annotations
 
 import colorsys
-import re
-import unicodedata
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Sequence
@@ -43,7 +41,7 @@ from typing import Any, Sequence
 from PIL import Image
 
 from .cor import RGB, cor_mais_proxima, limpar_alfa, luminancia, rgb_para_hex, sem_repetir
-from .estilo import NOME_VALIDO, dados_do_estilo, registrar_estilo
+from .estilo import NOME_VALIDO, dados_do_estilo, registrar_estilo, sugerir_nome, validar_nome_de_estilo
 from .imagem import abrir, escala_inteira, reduzir
 
 CORES = 32  # paleta padrão do preset; dá para pedir de 2 a 256
@@ -127,12 +125,6 @@ class Referencia:
 
 # --- extração -------------------------------------------------------------------------------------
 
-def _nome_do_arquivo(arquivo: str) -> str:
-    """`Floresta Nublada-3x.png` vira `floresta-nublada-3x`."""
-    sem_acento = unicodedata.normalize("NFKD", Path(arquivo).stem).encode("ascii", "ignore").decode()
-    return re.sub(r"[^a-z0-9]+", "-", sem_acento.lower()).strip("-")
-
-
 def _contar(imagem: Image.Image) -> list[tuple[int, RGB]]:
     """(quantos pixels, cor) das cores visíveis."""
     contagem = imagem.getcolors(maxcolors=imagem.width * imagem.height) or []
@@ -203,11 +195,13 @@ def extrair_estilo(imagem: "str | Path | Image.Image", nome: str | None = None, 
     que dá o que a imagem não diz. `cores`: tamanho máximo da paleta, de 2 a 256.
     """
     arquivo = Path(imagem).name if isinstance(imagem, (str, Path)) else "imagem"
-    nome = nome or _nome_do_arquivo(arquivo)
+    nome = nome or sugerir_nome(Path(arquivo).stem)
     if not NOME_VALIDO.match(nome):
         raise ValueError(f"nome de preset deve ser minúsculo com hífens (ex.: floresta-nublada), veio {nome!r}")
     if not 2 <= cores <= 256:
         raise ValueError(f"cores deve ir de 2 a 256, veio {cores}")
+    if Path(base).suffix != ".json":
+        validar_nome_de_estilo(str(base), "base")  # a mesma mensagem do gerar e do revisar
     dados_do_estilo(base)  # base que não existe falha antes de ler a imagem
 
     original = limpar_alfa(abrir(imagem))
