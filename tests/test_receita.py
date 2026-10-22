@@ -106,6 +106,13 @@ def test_todos_os_erros_de_uma_vez():
     assert str(ErroDeReceita(erros)).startswith("receita inválida:\n- ")
 
 
+def test_ampliado_no_limite_passa_e_acima_falha():
+    assert validar_receita({**MINIMA, "tamanho": [256, 128], "ampliar": 16}).ampliar == 16
+    (erro,) = erros_de({**MINIMA, "tamanho": [264, 128], "ampliar": 16})
+    assert "4224x2048" in erro and "máximo é 4096 por lado" in erro and "reduza ampliar ou tamanho" in erro
+    assert "ampliada" in erros_de({**MINIMA, "tamanho": [100, 4096], "ampliar": 2})[0]
+
+
 def test_json_quebrado_diz_onde():
     (erro,) = erros_de('{"camadas": [}')
     assert "linha 1, coluna" in erro
