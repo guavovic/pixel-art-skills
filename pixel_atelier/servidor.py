@@ -29,13 +29,15 @@ from pydantic import Field
 from . import __version__
 from .estilo import NOME_VALIDO, descrever_estilos, registrar_estilo
 from .gerador import gerar
+from .guia import capitulo as ler_capitulo
 from .receita import ErroDeReceita, descrever_formas
 from .referencia import CORES, ref
 from .revisao import revisar
 
 INSTRUCOES = ("Pixel art a partir de uma receita JSON curta. Veja descrever_formas e listar_estilos, "
               "depois gerar e revisar. Estilo novo: ref numa imagem de referência. "
-              "Respostas em texto; abra o PNG só na aprovação final.")
+              "Respostas em texto; abra o PNG só na aprovação final. "
+              "Dúvida de arte: guia (índice) e guia com o capítulo do assunto.")
 
 SO_LEITURA = ToolAnnotations(read_only_hint=True)
 
@@ -106,6 +108,16 @@ def criar_servidor(raiz: str | Path | None = None) -> MCPServer:
     def _listar_estilos() -> str:
         """Presets de estilo (do pacote e do usuário), um por linha com a descrição."""
         return descrever_estilos()
+
+    @ferramenta(name="guia", annotations=SO_LEITURA)
+    def _guia(
+        capitulo: Annotated[str | None, Field(description="nome do capítulo (sem ele, o índice)")] = None,
+    ) -> str:
+        """Guia de pixel art: o índice dos capítulos ou um capítulo curto, com regras e números."""
+        try:
+            return ler_capitulo(capitulo)
+        except KeyError as erro:
+            raise ToolError(erro.args[0]) from None
 
     @ferramenta(name="registrar_estilo")
     def _registrar_estilo(

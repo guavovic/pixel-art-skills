@@ -6,6 +6,7 @@
     python -m pixel_atelier estilos                              # presets disponíveis
     python -m pixel_atelier registrar-estilo estilo.json [--nome nome] [--sobrescrever]
     python -m pixel_atelier ref referencia.png [--nome nome] [--base preset] [--cores 32] [--sobrescrever]
+    python -m pixel_atelier guia [capitulo]                      # guia de pixel art: o índice ou um capítulo
     python -m pixel_atelier mcp [--raiz pasta]                   # servidor MCP por stdio (extra [mcp])
 
 Sem `--pasta`, `gerar` grava ao lado do arquivo da receita (ou na pasta atual, com "-").
@@ -22,6 +23,7 @@ from pathlib import Path
 
 from .estilo import descrever_estilos, registrar_estilo
 from .gerador import gerar
+from .guia import capitulo
 from .receita import ErroDeReceita, descrever_formas, ler_receita
 from .referencia import CORES, ref
 from .revisao import revisar
@@ -69,6 +71,15 @@ def _ref(args: argparse.Namespace) -> int:
         print(f"preset não gravado: {erro.args[0] if erro.args else erro}", file=sys.stderr)
         return 2
     print(referencia.resumo())
+    return 0
+
+
+def _guia(args: argparse.Namespace) -> int:
+    try:
+        print(capitulo(args.capitulo))
+    except KeyError as erro:
+        print(erro.args[0], file=sys.stderr)
+        return 2
     return 0
 
 
@@ -129,6 +140,10 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--cores", type=int, default=CORES, help=f"máximo de cores da paleta, de 2 a 256 (padrão: {CORES})")
     p.add_argument("--sobrescrever", action="store_true", help="troca um preset do usuário que já existe")
     p.set_defaults(funcao=_ref)
+
+    p = comandos.add_parser("guia", help="guia de pixel art: o índice ou um capítulo")
+    p.add_argument("capitulo", nargs="?", help="nome do capítulo (sem ele, o índice)")
+    p.set_defaults(funcao=_guia)
 
     p = comandos.add_parser("mcp", help="sobe o servidor MCP por stdio")
     p.add_argument("--raiz", type=Path, help="única pasta onde o servidor lê e grava (padrão: a atual)")
