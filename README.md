@@ -44,7 +44,7 @@ pixel-atelier mcp --raiz caminho/do/projeto   # ou python -m pixel_atelier mcp
 | --- | --- |
 | `gerar` | desenha uma receita (objeto, texto JSON ou caminho) e grava os PNGs; responde com o resumo |
 | `revisar` | confere um PNG pelas regras de pixel art e responde com o relatório (ver Revisão) |
-| `descrever_formas` | formas e parâmetros, com o padrão |
+| `descrever_formas` | campos da receita, formas e parâmetros, com o padrão |
 | `listar_estilos` | presets do pacote e do usuário |
 | `registrar_estilo` | guarda um estilo (objeto ou caminho `.json`) como preset com nome |
 | `ref` | tira o estilo de uma imagem de referência e grava como preset (ver Referência) |

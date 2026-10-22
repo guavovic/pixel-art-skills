@@ -2,7 +2,7 @@
 
     python -m pixel_atelier gerar receita.json [--pasta saida]   # "-" lê a receita da entrada padrão
     python -m pixel_atelier revisar cena.png [--fundo cena.png] [--estilo nome]   # relatório em texto
-    python -m pixel_atelier formas                               # parâmetros de cada forma, com o padrão
+    python -m pixel_atelier formas                               # campos da receita e parâmetros de cada forma, com o padrão
     python -m pixel_atelier estilos                              # presets disponíveis
     python -m pixel_atelier registrar-estilo estilo.json [--nome nome] [--sobrescrever]
     python -m pixel_atelier ref referencia.png [--nome nome] [--base preset] [--cores 32] [--sobrescrever]
@@ -121,7 +121,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--estilo", help="confere as cores contra a paleta deste estilo")
     p.set_defaults(funcao=_revisar)
 
-    p = comandos.add_parser("formas", help="lista as formas e os parâmetros")
+    p = comandos.add_parser("formas", help="lista os campos da receita, as formas e os parâmetros")
     p.set_defaults(funcao=lambda _: print(descrever_formas()) or 0)
 
     p = comandos.add_parser("estilos", help="lista os presets de estilo")

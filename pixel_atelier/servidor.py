@@ -101,7 +101,7 @@ def criar_servidor(raiz: str | Path | None = None) -> MCPServer:
 
     @ferramenta(name="descrever_formas", annotations=SO_LEITURA)
     def _descrever_formas() -> str:
-        """Formas da receita e os parâmetros de cada uma, com o padrão."""
+        """Campos da receita e as formas com os parâmetros de cada uma, com o padrão."""
         return descrever_formas()
 
     @ferramenta(name="listar_estilos", annotations=SO_LEITURA)

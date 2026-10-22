@@ -15,7 +15,7 @@ Ferramentas (toda resposta é texto, nenhuma devolve imagem):
 
 - `gerar`: Desenha a receita, grava os PNGs e responde com o resumo (arquivos, cores, cada camada).
 - `revisar`: Confere a imagem pelas regras de pixel art e responde com o relatório: ok ou alerta por regra.
-- `descrever_formas`: Formas da receita e os parâmetros de cada uma, com o padrão.
+- `descrever_formas`: Campos da receita e as formas com os parâmetros de cada uma, com o padrão.
 - `listar_estilos`: Presets de estilo (do pacote e do usuário), um por linha com a descrição.
 - `guia`: Guia de pixel art: o índice dos capítulos ou um capítulo curto, com regras e números.
 - `registrar_estilo`: Guarda um estilo como preset com nome, para usar depois em "estilo" da receita.
