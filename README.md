@@ -1,7 +1,3 @@
-<p align="center">
-  <img src="docs/icone.svg" alt="" width="160">
-</p>
-
 <h1 align="center">pixel-atelier</h1>
 
 <p align="center">
