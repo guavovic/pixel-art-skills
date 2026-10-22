@@ -48,6 +48,7 @@ def test_cada_embalagem_registra_o_servidor_e_leva_o_fluxo():
         "embalagens/gemini/gemini-extension.json": lambda d: d["mcpServers"],
         "embalagens/cursor/.cursor/mcp.json": lambda d: d["mcpServers"],
         "embalagens/copilot/.vscode/mcp.json": lambda d: d["servers"],
+        "embalagens/copilot/.github/mcp.json": lambda d: d["mcpServers"],
     }
     for caminho, pegar in servidores.items():
         servidor = pegar(json.loads(arquivos[caminho]))["pixel-atelier"]
