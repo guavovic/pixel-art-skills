@@ -74,22 +74,28 @@ class Resultado:
             "avisos": self.avisos(),
         }
 
-    def resumo(self) -> str:
-        """Resumo em poucas linhas: arquivos, tamanho, cores e o que cada camada fez."""
+    def resumo(self, base: Path | None = None) -> str:
+        """Resumo em poucas linhas: arquivos, tamanho, cores e o que cada camada fez.
+
+        Com `base`, os caminhos que ficam dentro dela aparecem relativos a ela (texto mais curto).
+        """
+        def caminho(p: Path) -> str:
+            return (p.relative_to(base) if base and p.is_relative_to(base) else p).as_posix()
+
         r = self.receita
         linhas = [f"{r.cena}: {r.largura}x{r.altura}, estilo {r.estilo.nome}, "
                   f"{'com laço' if r.laco else 'sem laço'}, seed {r.seed}, {len(self.camadas)} camadas"]
         if not self.arquivos:
             linhas.append("nada gravado (sem pasta)")
         de_camada = {c.arquivo for c in self.camadas}
-        compostos = [p.as_posix() for p in self.arquivos if p not in de_camada]
+        compostos = [caminho(p) for p in self.arquivos if p not in de_camada]
         if compostos:
             linhas.append("composto: " + ", ".join(compostos))
         cores = f"cores: {len(self.cores)} de {len(r.estilo.paleta)} da paleta"
         if len(self.cores) <= CORES_LISTADAS:
             cores += " (" + " ".join(sorted(rgb_para_hex(c) for c in self.cores)) + ")"
         linhas.append(cores)
-        pasta = next((c.arquivo.parent.as_posix() for c in self.camadas if c.arquivo), None)
+        pasta = next((caminho(c.arquivo.parent) for c in self.camadas if c.arquivo), None)
         linhas.append(f"camadas{' em ' + pasta if pasta else ''} (seed, área coberta, cores):")
         for c in self.camadas:
             arquivo = f" {c.arquivo.name}" if c.arquivo else ""

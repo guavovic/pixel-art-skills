@@ -247,6 +247,15 @@ def listar_estilos() -> list[str]:
     return sorted(nomes)
 
 
+def descrever_estilos() -> str:
+    """Uma linha por preset: o nome e, quando tem, a descrição."""
+    linhas = []
+    for nome in listar_estilos():
+        descricao = dados_do_estilo(nome).get("descricao")
+        linhas.append(f"{nome}: {descricao}" if descricao else nome)
+    return "\n".join(linhas)
+
+
 def dados_do_estilo(estilo: "str | Path | dict[str, Any] | Estilo", _nivel: int = 0) -> dict[str, Any]:
     """Dicionário cru do estilo (antes de resolver a paleta), já com a `base` aplicada.
 
