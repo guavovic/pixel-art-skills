@@ -9,7 +9,7 @@ from PIL import Image
 
 from pixel_atelier import Checagem, ampliar, carregar_estilo, compor, gerar, revisar
 from pixel_atelier.__main__ import main
-from pixel_atelier.revisao import CONTRASTE_FRENTE, _contraste, _medida
+from pixel_atelier.revisao import CONTRASTE_FRENTE, DICA_CONTRASTE, _contraste, _medida
 
 VAZIO = (0, 0, 0, 0)
 
@@ -91,6 +91,8 @@ def test_frente_que_some_no_fundo():
     assert c.estado == "alerta" and "frente (02) x fundo" in c.detalhe
     legivel = regra(revisao, "legibilidade")
     assert legivel.estado == "alerta" and "some no fundo" in legivel.detalhe and "x15-32" in legivel.detalhe
+    for alerta in (c, legivel):  # a ação certa no fim: mais contraste na frente, nunca escurecer o fundo
+        assert alerta.detalhe.endswith(DICA_CONTRASTE) and "nunca escureça nem apague o fundo" in alerta.detalhe
 
 
 def test_fundo_apagado_e_alerta_mesmo_com_contraste():
@@ -98,9 +100,11 @@ def test_fundo_apagado_e_alerta_mesmo_com_contraste():
     fundo = faixas(48, 48, [8, 12, 16])
     frente = caixa(48, 48, cinza(240), (16, 12, 32, 40))
     revisao = revisar(compor([fundo, frente]), camadas=[fundo, frente])
-    assert regra(revisao, "contraste").estado == "ok"
+    contraste = regra(revisao, "contraste")
+    assert contraste.estado == "ok" and DICA_CONTRASTE not in contraste.detalhe  # dica só com alerta
     legivel = regra(revisao, "legibilidade")
     assert legivel.estado == "alerta" and "fundo apagado" in legivel.detalhe
+    assert legivel.linha().endswith("clareie ou escureça a frente ou o contorno), nunca escureça nem apague o fundo")
 
 
 def test_camadas_do_meio_sem_contraste_entre_si():
@@ -129,12 +133,51 @@ def test_sprite_sozinho_precisa_de_faixa_de_valor():
     chapado.paste(cinza(130), (4, 4, 10, 10))
     c = regra(revisar(chapado), "legibilidade")
     assert c.estado == "alerta" and "faixa de valor do sprite 0.04" in c.detalhe
+    assert c.detalhe.endswith("aumente o contraste de valor do sprite (luz, sombra e contorno mais separados)")
 
 
 def test_cena_sem_camadas_pula_o_que_precisa_delas():
     revisao = revisar(faixas(32, 32, [50, 150]))
     assert {c.regra for c in revisao.checagens if c.estado == "pulada"} == {
-        "contraste", "legibilidade", "pillow shading", "serrilhado", "escala"}  # escala: chapado demais
+        "contraste", "legibilidade", "pillow shading", "serrilhado", "escala", "laço"}  # escala: chapado demais
+
+
+# --- laço ----------------------------------------------------------------------------------------
+
+def morro(largura: int, altura: int, alturas: list[int]) -> Image.Image:
+    """Camada com uma coluna cheia de baixo para cima em cada x, da altura pedida."""
+    imagem = chapa(largura, altura)
+    for x, h in enumerate(alturas):
+        if h:
+            imagem.paste(cinza(90), (x, altura - h, x + 1, altura))
+    return imagem
+
+
+def test_laco_bom_passa_e_quebrado_alerta():
+    largura = 32
+    bom = chapa(largura, 16)  # degradê que sobe e desce: a borda direita encosta na esquerda
+    for x in range(largura):
+        bom.paste(cinza(60 + 8 * abs(x - largura // 2)), (x, 0, x + 1, 16))
+    ok = regra(revisar(bom, laco=True), "laço")
+    assert ok.estado == "ok" and ok.detalhe.startswith("emenda x31|x0 dentro do normal")
+    quebrado = chapa(largura, 16)  # degradê que só sobe: a emenda é um salto
+    for x in range(largura):
+        quebrado.paste(cinza(40 + 6 * x), (x, 0, x + 1, 16))
+    alerta = regra(revisar(quebrado, laco=True), "laço")
+    assert alerta.estado == "alerta" and "quebrada em composto" in alerta.detalhe and "(máx 3x a média)" in alerta.detalhe
+    assert regra(revisar(quebrado), "laço").estado == "pulada"  # sem pedir, não confere
+
+
+def test_laco_quebrado_numa_camada():
+    largura, altura = 32, 16
+    ceu = chapa(largura, altura, cinza(200))
+    inteiro = morro(largura, altura, [1 + min(x, largura - x) // 2 for x in range(largura)])  # volta ao começo
+    cortado = morro(largura, altura, [1 + x * 12 // largura for x in range(largura)])  # sobe e para na borda
+    ok = regra(revisar(compor([ceu, inteiro]), camadas=[ceu, inteiro], laco=True), "laço")
+    assert ok.estado == "ok" and "composto e 2 camadas" in ok.detalhe
+    alerta = regra(revisar(compor([ceu, cortado]), camadas=[ceu, cortado], laco=True), "laço")
+    assert alerta.estado == "alerta" and "quebrada em 02" in alerta.detalhe
+    assert alerta.detalhe.endswith("desenhe a camada com laço")
 
 
 # --- pixel solto ---------------------------------------------------------------------------------
@@ -244,7 +287,7 @@ def test_cena_do_gerar_acha_as_camadas_e_responde_curto(tmp_path):
     assert revisao.camadas == ["01-ceu", "02-arvore", "03-chao"]
     linhas = revisao.resumo().splitlines()
     assert linhas[0].startswith("vale.png: 96x64, cena com 3 camadas, ")
-    assert len(linhas) == 9 and all(linha.split()[0] in ("ok", "alerta", "pulada") for linha in linhas[1:])
+    assert len(linhas) == 10 and all(linha.split()[0] in ("ok", "alerta", "pulada") for linha in linhas[1:])
     assert sum("[heurística]" in linha for linha in linhas) == 4
     assert len(revisao.resumo()) < 1200  # é o que o agente lê no lugar da imagem
     ampliada = revisar(tmp_path / "vale-2x.png")
@@ -263,6 +306,8 @@ def test_linha_de_comando_revisa_e_responde_em_texto(tmp_path, capsys):
     assert main(["revisar", str(tmp_path / "vale.png"), "--estilo", "snes-diurno"]) == 0
     saida = capsys.readouterr().out
     assert saida.startswith("vale.png: 96x64") and "pixel solto:" in saida
+    assert main(["revisar", str(tmp_path / "vale.png"), "--laco"]) == 0
+    assert "ok laço: emenda" in capsys.readouterr().out
     assert main(["revisar", str(tmp_path / "nada.png")]) == 2
     assert "revisão não feita" in capsys.readouterr().err
 

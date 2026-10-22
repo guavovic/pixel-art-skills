@@ -13,7 +13,7 @@ Ler um capítulo: `python -m pixel_atelier guia <capitulo>`, a ferramenta MCP `g
 | `luz` | volume, direção da luz, sombra, luz de contorno | pillow shading |
 | `pontilhado` | degradê, névoa, transição de tom | pixel solto (exceção) |
 | `animacao` | quadros, tempo, ciclo de andar | - |
-| `composicao` | camadas, profundidade, onde está o foco | contraste, composição repetida |
+| `composicao` | camadas, profundidade, onde está o foco, laço | contraste, composição repetida, laço |
 | `estilos` | SNES, Game Boy, metroidvania moderno | cores (com `--estilo`) |
 | `erros` | a arte "não lê", personagem some, fundo apagado | legibilidade, contraste |
 

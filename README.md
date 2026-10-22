@@ -67,7 +67,7 @@ Configuração num cliente MCP genérico (o formato `mcpServers` que a maioria a
 }
 ```
 
-Se o comando `pixel-atelier` não estiver no PATH do cliente, use `"command": "python"` com `"args": ["-m", "pixel_atelier", "mcp", "--raiz", "..."]`.
+O comando `pixel-atelier` precisa estar no PATH de quem abre a ferramenta (o cliente MCP sobe o servidor com o PATH dele). No Windows, venv sem ativar ou `pip install --user` costumam deixar o comando fora: abra a ferramenta com o venv ativado, instale com `pipx`, ou ponha em `command` o caminho absoluto do executável (`C:\caminho\.venv\Scripts\pixel-atelier.exe`, com as barras dobradas no JSON). Outra saída é `"command": "python"` com `"args": ["-m", "pixel_atelier", "mcp", "--raiz", "..."]`, com o `python` do ambiente onde o pacote está.
 
 ## Embalagens (issue #7)
 
@@ -99,6 +99,7 @@ Os chats no navegador (claude.ai, ChatGPT) só ligam servidor MCP remoto: o cone
 ```
 python -m pixel_atelier revisar saida/vale.png [--estilo snes-diurno]     # acha as camadas em saida/vale/
 python -m pixel_atelier revisar heroi.png --fundo saida/vale.png [--posicao 40 120]
+python -m pixel_atelier revisar saida/vale.png --laco                    # cena com laço: confere a emenda
 ```
 
 A receita `vale` acima, depois de `gerar`:
@@ -113,15 +114,17 @@ ok pillow shading [heurística]: 3 silhuetas, nenhuma com miolo 0.06+ mais claro
 ok serrilhado [heurística]: 3 degraus fora do ritmo em 742 (0.4%, máx 6%); mais em 03-arvore (2, o primeiro em (246,145))
 ok escala [heurística]: bloco 1x em 148 de 148 ladrilhos 16x16
 ok composição repetida [heurística]: nenhum trecho 12x12 igual 3+ vezes
+pulada laço: passe laco (--laco) se a cena dá a volta na horizontal
 ```
 
-Com problema, a linha diz o quanto e onde, por exemplo `alerta legibilidade: frente some no fundo em 100% da borda (máx 25%), x15-32 y17-30; ...`.
+Com problema, a linha diz o quanto e onde, por exemplo `alerta legibilidade: frente some no fundo em 100% da borda (máx 25%), x15-32 y17-30; ...`. Alerta de contraste ou de legibilidade termina com a ação: aumentar o contraste de valor da frente, nunca escurecer nem apagar o fundo.
 
 | Regra | Alerta quando |
 | --- | --- |
 | cores | mais de 16 num sprite ou 64 numa cena; com `--estilo`, cor fora da paleta |
 | contraste | mediana da diferença de valor na borda abaixo de 0,05 entre camadas ou 0,10 da frente contra o fundo |
 | legibilidade | a frente some (diferença < 0,05) em mais de 25% da borda, ou o fundo tem faixa de valor < 0,20 (fundo apagado: destaque por contraste, não escurecendo o fundo); sprite sozinho com faixa < 0,30 |
+| laço | com `--laco`: a emenda (coluna da direita contra a da esquerda) passa de 3x a média entre colunas vizinhas e da maior delas, no composto ou numa camada |
 | pixel solto | mais de 0,5% dos pixels (pontilhado não conta) |
 | pillow shading | borda 0,06+ mais escura que o miolo nos 4 lados por igual |
 | serrilhado | mais de 6% dos degraus da silhueta fora do ritmo (3,1,3 ou 1,3,1) |

@@ -100,7 +100,9 @@ def test_revisar_responde_o_relatorio_em_texto(tmp_path):
     chamar(servidor, "gerar", receita={**PEQUENA, "saida": "tudo"}, pasta="saida")
     erro, texto = chamar(servidor, "revisar", imagem="saida/mcp.png", estilo="snes-diurno")
     assert not erro and texto.startswith("mcp.png: 64x32, cena com 2 camadas")
-    assert "pixel solto:" in texto and "[heurística]" in texto
+    assert "pixel solto:" in texto and "[heurística]" in texto and "pulada laço" in texto
+    erro, texto = chamar(servidor, "revisar", imagem="saida/mcp.png", laco=True)
+    assert not erro and "ok laço: emenda" in texto
     erro, texto = chamar(servidor, "revisar", imagem="saida/mcp.png", fundo="../fora.png")
     assert erro and "fora da raiz" in texto
     erro, texto = chamar(servidor, "revisar", imagem="nada.png")
@@ -120,6 +122,7 @@ def test_descrever_formas_e_listar_estilos(tmp_path):
 
 def test_guia_devolve_o_indice_e_um_capitulo(tmp_path):
     servidor = criar_servidor(tmp_path)
+    assert servidor.instructions.startswith("Pixel art") and "Primeiro passo" in servidor.instructions
     erro, indice = chamar(servidor, "guia")
     assert not erro and indice.startswith("# Guia de pixel art") and "`erros`" in indice
     erro, texto = chamar(servidor, "guia", capitulo="cor")
