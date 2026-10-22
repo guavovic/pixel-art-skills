@@ -45,7 +45,8 @@ DESCRICAO_SKILL = (
 )
 SECOES_AGENTS = ("Por onde começar", "Fluxo de trabalho", "Regras de arte")
 # Trechos do AGENTS.md que só fazem sentido dentro do repositório; cada um precisa existir na fonte.
-TROCAS_AGENTS = [("Formato no README, seção Receita.", f"Formato na [seção Receita do README]({REPO}#receita).")]
+TROCAS_AGENTS = [("Formato em `docs/referencia.md`, seção Receita.",
+                  f"Formato na [seção Receita da referência]({REPO}/blob/main/docs/referencia.md#receita).")]
 
 AVISO = ("Arquivo gerado por scripts/embalar.py a partir de AGENTS.md, pixel_atelier/guia/, "
          "pixel_atelier/servidor.py e pyproject.toml. Não edite à mão: mude a fonte e rode o script de novo.")
