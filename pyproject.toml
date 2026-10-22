@@ -15,7 +15,8 @@ dependencies = ["Pillow>=10.0"]
 pixel-atelier = "pixel_atelier.__main__:main"
 
 [project.optional-dependencies]
-dev = ["pytest>=8"]
+mcp = ["mcp>=2.3,<3"]
+dev = ["pytest>=8", "mcp>=2.3,<3"]
 
 [tool.setuptools.packages.find]
 include = ["pixel_atelier*"]
