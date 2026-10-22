@@ -58,7 +58,7 @@ camadas em saida/vale (seed, área coberta, cores):
 
 Camada vazia ou que tapa a tela inteira sai como `aviso:` no fim.
 
-Os presets do usuário ficam em `~/.pixel-atelier/estilos` (ou na pasta da variável `PIXEL_ATELIER_ESTILOS`). Os nomes do pacote são reservados.
+Os presets do usuário ficam em `~/.pixel-atelier/estilos` (ou na pasta da variável `PIXEL_ATELIER_ESTILOS`). Os nomes do pacote são reservados. O nome do preset é o do arquivo, minúsculo com hífens: um JSON copiado à mão com outro nome (`Meu_Estilo.json`) não carrega por nome até ser renomeado (`meu-estilo.json`); o `estilos` avisa, e o erro de carregar diz o nome certo.
 
 ## Em Python
 
