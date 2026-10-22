@@ -5,11 +5,13 @@
     python -m pixel_atelier formas                               # parâmetros de cada forma, com o padrão
     python -m pixel_atelier estilos                              # presets disponíveis
     python -m pixel_atelier registrar-estilo estilo.json [--nome nome] [--sobrescrever]
+    python -m pixel_atelier ref referencia.png [--nome nome] [--base preset] [--cores 32] [--sobrescrever]
     python -m pixel_atelier mcp [--raiz pasta]                   # servidor MCP por stdio (extra [mcp])
 
 Sem `--pasta`, `gerar` grava ao lado do arquivo da receita (ou na pasta atual, com "-").
 Receita inválida sai com código 2 e a lista de problemas. `revisar` sai com 0 mesmo com alerta
-(o relatório é a resposta) e com 2 quando não consegue ler a imagem.
+(o relatório é a resposta) e com 2 quando não consegue ler a imagem. `ref` grava o preset tirado
+da imagem e responde com o resumo (paleta, rampas, pixel e faixa de valor).
 """
 from __future__ import annotations
 
@@ -21,6 +23,7 @@ from pathlib import Path
 from .estilo import descrever_estilos, registrar_estilo
 from .gerador import gerar
 from .receita import ErroDeReceita, descrever_formas, ler_receita
+from .referencia import CORES, ref
 from .revisao import revisar
 
 
@@ -56,6 +59,16 @@ def _registrar(args: argparse.Namespace) -> int:
         print(f"estilo não registrado: {erro.args[0] if erro.args else erro}", file=sys.stderr)
         return 2
     print(f"preset {destino.stem} gravado em {destino.as_posix()}")
+    return 0
+
+
+def _ref(args: argparse.Namespace) -> int:
+    try:
+        referencia = ref(args.imagem, args.nome, base=args.base, cores=args.cores, sobrescrever=args.sobrescrever)
+    except (OSError, KeyError, ValueError, TypeError) as erro:
+        print(f"preset não gravado: {erro.args[0] if erro.args else erro}", file=sys.stderr)
+        return 2
+    print(referencia.resumo())
     return 0
 
 
@@ -108,6 +121,14 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--nome", help="nome do preset (padrão: o campo nome do JSON)")
     p.add_argument("--sobrescrever", action="store_true", help="troca um preset do usuário que já existe")
     p.set_defaults(funcao=_registrar)
+
+    p = comandos.add_parser("ref", help="tira o estilo de uma imagem de referência e grava como preset")
+    p.add_argument("imagem", type=Path, help="PNG de referência (ampliado também serve)")
+    p.add_argument("--nome", help="nome do preset (padrão: o do arquivo, minúsculo com hífens)")
+    p.add_argument("--base", default="snes-diurno", help="preset que dá o que a imagem não diz (padrão: snes-diurno)")
+    p.add_argument("--cores", type=int, default=CORES, help=f"máximo de cores da paleta, de 2 a 256 (padrão: {CORES})")
+    p.add_argument("--sobrescrever", action="store_true", help="troca um preset do usuário que já existe")
+    p.set_defaults(funcao=_ref)
 
     p = comandos.add_parser("mcp", help="sobe o servidor MCP por stdio")
     p.add_argument("--raiz", type=Path, help="única pasta onde o servidor lê e grava (padrão: a atual)")

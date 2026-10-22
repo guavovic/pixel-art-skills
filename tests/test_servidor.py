@@ -35,7 +35,7 @@ def test_lista_as_ferramentas_so_com_texto(tmp_path):
             return (await cliente.list_tools()).tools
 
     ferramentas = {f.name: f for f in asyncio.run(rodar())}
-    assert set(ferramentas) == {"gerar", "revisar", "descrever_formas", "listar_estilos", "registrar_estilo"}
+    assert set(ferramentas) == {"gerar", "revisar", "descrever_formas", "listar_estilos", "registrar_estilo", "ref"}
     assert all(f.output_schema is None for f in ferramentas.values())  # sem cópia estruturada do texto
     assert all(len(f.description) < 120 for f in ferramentas.values())
 
@@ -134,6 +134,44 @@ def test_registrar_estilo_por_objeto_e_por_arquivo(tmp_path):
     assert erro and "estilo não registrado: o preset 'snes-diurno' vem com o pacote" in texto
     erro, texto = chamar(servidor, "registrar_estilo", estilo="game-boy")
     assert erro and "objeto ou o caminho de um arquivo .json" in texto
+
+
+def test_ref_grava_o_preset_e_responde_o_resumo(tmp_path):
+    from PIL import Image
+
+    servidor = criar_servidor(tmp_path)
+    referencia = Image.new("RGB", (32, 32), (40, 80, 180))
+    referencia.paste((20, 60, 30), (0, 16, 32, 32))
+    referencia.paste((150, 210, 100), (0, 24, 31, 32))
+    (tmp_path / "refs").mkdir()
+    referencia.save(tmp_path / "refs" / "vale.png")
+    erro, texto = chamar(servidor, "ref", imagem="refs/vale.png", nome="mcp-ref")
+    assert not erro and texto.startswith("preset mcp-ref gravado em ")
+    assert "paleta: 3 cores" in texto and "folha, grama: 2 cores" in texto
+    assert set(carregar_estilo("mcp-ref").paleta) == {(40, 80, 180), (20, 60, 30), (150, 210, 100)}
+
+    (tmp_path / "base.json").write_text('{"base": "game-boy", "nome": "x"}', encoding="utf-8")
+    erro, texto = chamar(servidor, "ref", imagem="refs/vale.png", nome="mcp-ref-gb", base="base.json")
+    assert not erro and carregar_estilo("mcp-ref-gb").sombreamento == "pontilhado"
+
+
+@pytest.mark.parametrize("argumentos, mensagem", [
+    ({"imagem": "../fora.png", "nome": "fora"}, "fora da raiz"),
+    ({"imagem": "nada.png", "nome": "nada"}, "'nada.png' não existe"),
+    ({"imagem": "ref.png", "nome": "x", "base": "../../fora"}, "nome de um preset ou um arquivo .json"),
+    ({"imagem": "ref.png", "nome": "x", "base": "../fora.json"}, "fora da raiz"),
+    ({"imagem": "ref.png", "nome": "Nome Ruim"}, "preset não gravado: nome de preset"),
+    ({"imagem": "ref.png", "nome": "snes-diurno"}, "vem com o pacote"),
+])
+def test_ref_recusa_caminho_fora_da_raiz_e_nome_invalido(tmp_path, argumentos, mensagem):
+    from PIL import Image
+
+    raiz = tmp_path / "raiz"
+    raiz.mkdir()
+    Image.new("RGB", (16, 16), (90, 90, 90)).save(tmp_path / "fora.png")
+    Image.new("RGB", (16, 16), (90, 90, 90)).save(raiz / "ref.png")
+    erro, texto = chamar(criar_servidor(raiz), "ref", **argumentos)
+    assert erro and mensagem in texto
 
 
 def test_sobe_por_stdio_com_o_comando_mcp(tmp_path):

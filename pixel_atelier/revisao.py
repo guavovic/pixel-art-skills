@@ -59,7 +59,7 @@ from PIL import Image
 
 from .cor import distancia2, luminancia, rgb_para_hex
 from .estilo import Estilo, carregar_estilo
-from .imagem import compor
+from .imagem import abrir, compor, escala_inteira, reduzir
 
 CORES_SPRITE = 16
 CORES_CENA = 64  # o SNES põe até 128 cores de fundo na tela (8 subpaletas de 16); 64 deixa folga sem virar foto
@@ -134,37 +134,6 @@ class Revisao:
 
 # --- leitura -------------------------------------------------------------------------------------
 
-def _abrir(imagem: "str | Path | Image.Image") -> Image.Image:
-    if isinstance(imagem, Image.Image):
-        return imagem.convert("RGBA")
-    with Image.open(imagem) as aberta:
-        return aberta.convert("RGBA")
-
-
-def escala_inteira(imagem: Image.Image) -> int:
-    """N quando a imagem é toda feita de blocos NxN (ampliada por vizinho mais próximo), senão 1."""
-    if len(imagem.getcolors(maxcolors=2) or []) == 1:
-        return 1  # cor única: qualquer N serviria
-    px = imagem.load()
-    largura, altura = imagem.size
-    n = 0
-    for linhas, colunas, ponto in ((altura, largura, lambda a, b: px[b, a]), (largura, altura, lambda a, b: px[a, b])):
-        for a in range(linhas):
-            inicio = 0
-            for b in range(1, colunas + 1):
-                if b == colunas or ponto(a, b) != ponto(a, b - 1):
-                    n = math.gcd(n, b - inicio)
-                    if n == 1:
-                        return 1
-                    inicio = b
-    # blocos grandes demais ou imagem que encolheria para menos de 16 pixels: é arte chapada, não ampliada
-    return n if n <= 16 and min(largura, altura) // n >= 16 else 1
-
-
-def _reduzir(imagem: Image.Image, n: int) -> Image.Image:
-    return imagem if n == 1 else imagem.resize((imagem.width // n, imagem.height // n), Image.Resampling.NEAREST)
-
-
 def _camadas_ao_lado(arquivo: Path) -> list[Path]:
     """As camadas que `gerar` grava: `<cena>/NN-nome.png` ao lado de `<cena>.png` ou `<cena>-Nx.png`."""
     nome = arquivo.stem
@@ -186,7 +155,7 @@ def _ler_camadas(camadas: "str | Path | Sequence[str | Path | Image.Image]") -> 
     lidas = []
     for i, c in enumerate(camadas):
         nome = Path(c).stem if isinstance(c, (str, Path)) else f"{i + 1:02d}"
-        lidas.append((nome, _abrir(c)))
+        lidas.append((nome, abrir(c)))
     return lidas
 
 
@@ -575,7 +544,7 @@ def revisar(
     Arquivo que não abre ou tamanhos que não batem levantam `ValueError` ou `OSError`.
     """
     nome = Path(imagem).name if isinstance(imagem, (str, Path)) else "imagem"
-    original = _abrir(imagem)
+    original = abrir(imagem)
     if isinstance(estilo, str):
         estilo = carregar_estilo(estilo)
 
@@ -593,13 +562,13 @@ def revisar(
                 raise ValueError(f"camada {n} tem {c.width}x{c.height} e a imagem {original.width}x{original.height}")
     else:
         escala = escala_inteira(original)
-    alvo = _reduzir(original, escala)
+    alvo = reduzir(original, escala)
 
     sprite = alvo.getchannel("A").getextrema()[0] < 255 and not lidas
     # planos: (nome, a camada, o que está atrás dela)
     if fundo is not None:
-        tras = _abrir(fundo)
-        tras = _reduzir(tras, escala_inteira(tras))
+        tras = abrir(fundo)
+        tras = reduzir(tras, escala_inteira(tras))
         if alvo.width > tras.width or alvo.height > tras.height:
             raise ValueError(f"sprite {alvo.width}x{alvo.height} maior que o fundo {tras.width}x{tras.height}")
         x, y = posicao or ((tras.width - alvo.width) // 2, (tras.height - alvo.height) // 2)
