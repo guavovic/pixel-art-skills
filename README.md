@@ -17,6 +17,14 @@ Ateliê de pixel art para agentes de IA. O motor guarda a técnica (paleta, ramp
 - **Estilos** (`pixel_atelier/estilos/*.json`): `metroidvania-noturno`, `snes-diurno`, `game-boy`.
 - **Exemplo**: `exemplos/montar_cena.py` monta a mesma receita nos três estilos.
 
+## Receitas (issue #2)
+
+- `receita.py`: formato da receita em JSON, validado antes de desenhar (`validar_receita`), com todos os erros de uma vez e sugestão de nome parecido.
+- `gerador.py`: `gerar(receita, pasta)` desenha tudo e devolve um `Resultado` com `resumo()` em texto e `para_dicionario()`.
+- `__main__.py`: linha de comando `gerar`, `formas`, `estilos` e `registrar-estilo`.
+- **Presets**: estilo por nome, `{"base": "preset", ...}` para mudar só alguns campos, `registrar_estilo` para guardar um estilo novo com nome.
+- **Exemplos**: `exemplos/metroidvania-noturno.json` e `exemplos/snes-diurno.json` dão os mesmos pixels que `montar_cena.py`.
+
 | metroidvania-noturno | snes-diurno | game-boy |
 | --- | --- | --- |
 | ![](exemplos/metroidvania-noturno-3x.png) | ![](exemplos/snes-diurno-3x.png) | ![](exemplos/game-boy-3x.png) |
@@ -40,12 +48,69 @@ Toda forma tem a mesma assinatura: `forma(estilo, largura, altura, *, seed=0, pr
 
 `profundidade` vai de 0 (perto) a 1 (fundo) e puxa as cores para a atmosfera do estilo: é o que separa as camadas.
 
+### Receita
+
+A cena inteira cabe num JSON curto. Só `camadas` é obrigatório; as camadas vão do fundo para a frente.
+
+```json
+{
+  "cena": "vale",
+  "tamanho": [320, 180],
+  "estilo": {"base": "snes-diurno", "contorno": false},
+  "seed": 7,
+  "ampliar": 3,
+  "camadas": [
+    {"forma": "ceu", "astro": "sol", "posicao": [0.78, 0.18]},
+    {"forma": "terreno", "nome": "montanhas", "profundidade": 0.85, "base": 0.62, "amplitude": 0.3, "papel": "pedra"},
+    {"forma": "arvore", "profundidade": 0.4, "tipo": "mista", "base": 0.85},
+    {"forma": "terreno", "nome": "chao", "seed": 5, "base": 0.88}
+  ]
+}
+```
+
+| Campo | Padrão | O que é |
+| --- | --- | --- |
+| `cena` | `"cena"` | nome dos arquivos de saída |
+| `descricao` | `""` | texto livre |
+| `tamanho` | `[320, 180]` | largura e altura reais |
+| `estilo` | `"snes-diurno"` | preset, caminho de JSON ou dicionário de estilo (aceita `base`) |
+| `laco` | `true` | laço horizontal; com ele a largura precisa ser múltipla de 8 |
+| `seed` | `0` | sorteia as camadas sem `seed` própria; camada com `seed` fica fixa |
+| `ampliar` | `1` | grava também o composto ampliado N vezes |
+| `saida` | `"tudo"` | `"tudo"`, `"composto"` ou `"camadas"` |
+| `camadas` | obrigatório | `forma`, `nome` opcional e os parâmetros da forma |
+
+```
+python -m pixel_atelier gerar receita.json [--pasta saida]   # ou "-" para ler da entrada padrão
+python -m pixel_atelier formas                               # parâmetros de cada forma, com o padrão
+python -m pixel_atelier estilos
+python -m pixel_atelier registrar-estilo meu-estilo.json [--nome nome] [--sobrescrever]
+```
+
+Grava `<cena>.png`, `<cena>-3x.png` e `<cena>/01-ceu.png`... e responde em texto, sem precisar abrir a imagem:
+
+```
+vale: 320x180, estilo snes-diurno, com laço, seed 7, 4 camadas
+composto: saida/vale.png, saida/vale-3x.png
+cores: 28 de 146 da paleta
+camadas em saida/vale (seed, área coberta, cores):
+  01 ceu: seed 10909, 100%, 7 cores 01-ceu.png
+  02 montanhas: seed 33290, 57%, 6 cores 02-montanhas.png
+  03 arvore: seed 45195, 33%, 10 cores 03-arvore.png
+  04 chao: seed 5, 15%, 6 cores 04-chao.png
+```
+
+Camada vazia ou que tapa a tela inteira sai como `aviso:` no fim.
+
+Os presets do usuário ficam em `~/.pixel-atelier/estilos` (ou na pasta da variável `PIXEL_ATELIER_ESTILOS`). Os nomes do pacote são reservados.
+
 ## Desenvolvimento
 
 ```
 pip install -e .[dev]
 pytest
 python exemplos/montar_cena.py
+python -m pixel_atelier gerar exemplos/snes-diurno.json
 ```
 
 Requer Python 3.11+ e Pillow. Sem numpy.
