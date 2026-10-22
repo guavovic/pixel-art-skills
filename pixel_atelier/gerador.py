@@ -18,7 +18,7 @@ from PIL import Image
 
 from .cor import RGB, cores_usadas, rgb_para_hex
 from .formas import desenhar
-from .imagem import ampliar, compor
+from .imagem import ampliar, compor, gravar_png
 from .receita import Receita, validar_receita
 
 CORES_LISTADAS = 16  # até quantas cores o resumo lista em hex
@@ -135,15 +135,15 @@ def _gravar(resultado: Resultado, pasta: Path) -> None:
     pasta.mkdir(parents=True, exist_ok=True)
     if r.saida in ("tudo", "composto"):
         destino = pasta / f"{r.cena}.png"
-        resultado.composto.save(destino)
+        gravar_png(resultado.composto, destino, r.laco)
         resultado.arquivos.append(destino)
         if r.ampliar > 1:
             destino = pasta / f"{r.cena}-{r.ampliar}x.png"
-            ampliar(resultado.composto, r.ampliar).save(destino)
+            gravar_png(ampliar(resultado.composto, r.ampliar), destino, r.laco)
             resultado.arquivos.append(destino)
     if r.saida in ("tudo", "camadas"):
         (pasta / r.cena).mkdir(exist_ok=True)
         for receita_camada, c in zip(r.camadas, resultado.camadas):
             c.arquivo = pasta / r.cena / receita_camada.arquivo
-            c.imagem.save(c.arquivo)
+            gravar_png(c.imagem, c.arquivo, receita_camada.parametros["laco"])
             resultado.arquivos.append(c.arquivo)

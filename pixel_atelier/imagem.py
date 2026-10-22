@@ -6,6 +6,23 @@ from pathlib import Path
 from typing import Iterable
 
 from PIL import Image
+from PIL.PngImagePlugin import PngInfo
+
+MARCA_LACO = "pixel-atelier:laco"  # chave de texto no PNG que o `gerar` grava: "sim" ou "nao"
+
+
+def gravar_png(imagem: Image.Image, destino: Path, laco: bool) -> None:
+    """Grava o PNG com a marca de laço num bloco de texto (tEXt), que viaja junto com o arquivo."""
+    info = PngInfo()
+    info.add_text(MARCA_LACO, "sim" if laco else "nao")
+    imagem.save(destino, pnginfo=info)
+
+
+def marca_de_laco(arquivo: "str | Path") -> bool | None:
+    """O que o `gerar` gravou no PNG: True (cena com laço), False (sem laço) ou None (sem marca)."""
+    with Image.open(arquivo) as aberta:
+        valor = aberta.info.get(MARCA_LACO)
+    return {"sim": True, "nao": False}.get(valor) if isinstance(valor, str) else None
 
 
 def compor(camadas: Iterable[Image.Image]) -> Image.Image:

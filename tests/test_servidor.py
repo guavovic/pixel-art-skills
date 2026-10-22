@@ -100,9 +100,12 @@ def test_revisar_responde_o_relatorio_em_texto(tmp_path):
     chamar(servidor, "gerar", receita={**PEQUENA, "saida": "tudo"}, pasta="saida")
     erro, texto = chamar(servidor, "revisar", imagem="saida/mcp.png", estilo="snes-diurno")
     assert not erro and texto.startswith("mcp.png: 64x32, cena com 2 camadas")
-    assert "pixel solto:" in texto and "[heurística]" in texto and "pulada laço" in texto
+    assert "pixel solto:" in texto and "[heurística]" in texto
+    assert "ok laço: emenda" in texto and "laço pela marca do gerar" in texto  # sem laco, vale a marca do gerar
     erro, texto = chamar(servidor, "revisar", imagem="saida/mcp.png", laco=True)
-    assert not erro and "ok laço: emenda" in texto
+    assert not erro and "ok laço: emenda" in texto and "marca" not in texto.splitlines()[-1]
+    erro, texto = chamar(servidor, "revisar", imagem="saida/mcp.png", laco=False)
+    assert not erro and "pulada laço: conferência do laço desligada" in texto
     erro, texto = chamar(servidor, "revisar", imagem="saida/mcp.png", fundo="../fora.png")
     assert erro and "fora da raiz" in texto
     erro, texto = chamar(servidor, "revisar", imagem="nada.png")
