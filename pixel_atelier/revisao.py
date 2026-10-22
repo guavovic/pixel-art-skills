@@ -4,6 +4,7 @@
 
     print(revisar("saida/vale.png").resumo())               # cena; acha as camadas em saida/vale/
     print(revisar("heroi.png", fundo="saida/vale.png").resumo())  # sprite por cima de uma cena
+    print(revisar("saida/vale.png", laco=True).resumo())    # cena com laço: confere a emenda também
 
 O relatório é o que o agente lê no lugar da imagem: uma linha por regra, `ok`, `alerta` ou
 `pulada`, com o número que justifica e onde (x, y em pixel real). O PNG só precisa ser aberto
@@ -25,7 +26,8 @@ olhar valor e não matiz é o teste da imagem em escala de cinza.
 - legibilidade: a frente some no fundo onde a diferença fica abaixo de 0,05; alerta se isso
   passar de 25% da borda. Regra da casa: destacar por contraste, não apagar o fundo; fundo com
   faixa de valor (percentil 5 a 95) abaixo de 0,20 é alerta de fundo apagado. Sprite sozinho
-  precisa de faixa de valor de pelo menos 0,30.
+  precisa de faixa de valor de pelo menos 0,30. Alerta de contraste ou de legibilidade termina com
+  a ação certa: mais contraste de valor na frente, nunca escurecer ou apagar o fundo.
 - pixel solto: a mesma definição de `pintura.limpar_soltos` (os 4 vizinhos de uma mesma cor
   diferente da dele), sem contar pontilhado (mesma cor na diagonal ou a 2 e 4 pixels). Alerta
   acima de 0,5% dos pixels.
@@ -40,6 +42,12 @@ olhar valor e não matiz é o teste da imagem em escala de cinza.
   sobrepor. Só conta trecho com detalhe: 4 cores ou mais, nenhuma em mais de 60% e pelo menos 6
   linhas e 6 colunas diferentes (tronco e faixa não contam); textura periódica e pontilhado (mais
   de 25% de blocos 2x2 em xadrez) também não.
+- laço (só com `laco=True`, ou `--laco`; a imagem não diz se a cena dá a volta): a diferença de
+  valor entre a coluna da borda direita e a da esquerda (a emenda), no composto e em cada camada.
+  Pixel cheio contra vazio conta 1. Alerta quando a emenda passa de 3 vezes a média das
+  diferenças entre colunas vizinhas e também da maior delas: num laço certo a emenda é só mais um
+  par de colunas, então nunca é a maior da imagem com folga; num laço quebrado (objeto cortado,
+  degradê que não volta) ela é.
 
 Cada limiar está explicado no capítulo da regra no guia (`pixel_atelier/guia/`, índice em
 `indice.md`); mudou aqui, muda lá.
@@ -82,6 +90,9 @@ JANELA_DOMINANTE = 0.6  # trecho com uma cor em mais disso é liso demais para c
 JANELA_VARIADA = 6  # linhas e colunas diferentes que o trecho precisa ter
 COPIAS = 3
 ATMOSFERA = 0.5  # camada com mais pixels de borda do que isso (fração) é névoa ou raio pontilhado
+LACO_EMENDA = 3  # emenda acima disso vezes a média entre colunas vizinhas (e acima da maior) é laço quebrado
+DICA_CONTRASTE = ("aumente o contraste de valor da frente (clareie ou escureça a frente ou o contorno), "
+                  "nunca escureça nem apague o fundo")
 
 VIZINHOS = ((1, 0), (-1, 0), (0, 1), (0, -1))
 LADOS = {(0, -1): "topo", (0, 1): "base", (-1, 0): "esquerda", (1, 0): "direita"}
@@ -295,6 +306,8 @@ def _contraste(pares: list[tuple[str, list[tuple[int, int, float]]]]) -> Checage
     if ruins:
         partes.append("baixo em " + ", ".join(f"{n} {_medida(m, CONTRASTE_CAMADAS)}" for n, m in ruins[:3]))
     alerta = frente < CONTRASTE_FRENTE or bool(ruins)
+    if alerta:
+        partes.append(DICA_CONTRASTE)
     return Checagem("contraste", "alerta" if alerta else "ok", "; ".join(partes))
 
 
@@ -310,14 +323,19 @@ def _legibilidade(borda_frente: list[tuple[int, int, float]] | None, fundo: _Px 
             partes[0] += f", {_regiao(somem)}"
         partes.append(f"fundo com faixa de valor {_medida(faixa, FAIXA_FUNDO)} (mín {FAIXA_FUNDO:.2f})")
         if faixa < FAIXA_FUNDO:
-            partes.append("fundo apagado: destaque a frente por contraste, não escurecendo o fundo")
+            partes.append("fundo apagado")
         alerta = fracao > SOME_MAX or faixa < FAIXA_FUNDO
+        if alerta:
+            partes.append(DICA_CONTRASTE)
         return Checagem("legibilidade", "alerta" if alerta else "ok", "; ".join(partes))
     if alvo is not None:
         valores = [alvo.valor(x, y) for y in range(alvo.altura) for x in range(alvo.largura) if alvo.cheio(x, y)]
         faixa = _faixa(valores)
         detalhe = f"faixa de valor do sprite {_medida(faixa, FAIXA_SPRITE)} (mín {FAIXA_SPRITE:.2f}; teste em escala de cinza)"
-        return Checagem("legibilidade", "alerta" if faixa < FAIXA_SPRITE else "ok", detalhe)
+        if faixa < FAIXA_SPRITE:
+            return Checagem("legibilidade", "alerta",
+                            detalhe + "; aumente o contraste de valor do sprite (luz, sombra e contorno mais separados)")
+        return Checagem("legibilidade", "ok", detalhe)
     return Checagem("legibilidade", "pulada", "sem camadas nem fundo (passe camadas ou fundo)")
 
 
@@ -508,6 +526,42 @@ def _repeticao(alvo: Image.Image) -> Checagem:
     return Checagem("composição repetida", "alerta", detalhe, True)
 
 
+def _diferenca_de_colunas(p: _Px, a: int, b: int) -> float:
+    """Diferença média de valor entre as colunas `a` e `b`; cheio contra vazio conta 1."""
+    total = 0.0
+    for y in range(p.altura):
+        cheio_a, cheio_b = p.cheio(a, y), p.cheio(b, y)
+        if cheio_a and cheio_b:
+            total += abs(p.valor(a, y) - p.valor(b, y))
+        elif cheio_a != cheio_b:
+            total += 1
+    return total / p.altura
+
+
+def _laco(imagens: list[tuple[str, Image.Image]], pedido: bool) -> Checagem:
+    if not pedido:
+        return Checagem("laço", "pulada", "passe laco (--laco) se a cena dá a volta na horizontal")
+    largura = imagens[0][1].width
+    if largura < 3:
+        return Checagem("laço", "pulada", "imagem estreita demais para medir a emenda")
+    medidas = []  # (nome, emenda, média, maior)
+    for nome, imagem in imagens:
+        p = _Px(imagem)
+        vizinhas = [_diferenca_de_colunas(p, x, x + 1) for x in range(largura - 1)]
+        medidas.append((nome, _diferenca_de_colunas(p, largura - 1, 0), sum(vizinhas) / len(vizinhas), max(vizinhas)))
+    quebradas = [m for m in medidas if m[1] > LACO_EMENDA * m[2] and m[1] > m[3]]
+    _, emenda, media, _ = medidas[0]
+    if not quebradas:
+        onde = f"composto e {len(imagens) - 1} camadas" if len(imagens) > 1 else "composto"
+        return Checagem("laço", "ok", f"emenda x{largura - 1}|x0 dentro do normal no {onde} (composto {emenda:.2f}, "
+                                      f"média entre colunas {media:.2f}; máx {LACO_EMENDA}x a média)")
+    nome, emenda, media, maior = max(quebradas, key=lambda m: m[1] / max(m[2], 1e-9))
+    outras = f" e mais {len(quebradas) - 1}" if len(quebradas) > 1 else ""
+    return Checagem("laço", "alerta", f"emenda x{largura - 1}|x0 quebrada em {nome}{outras}: {emenda:.2f} contra média "
+                                      f"{media:.2f} e maior {maior:.2f} entre colunas vizinhas (máx {LACO_EMENDA}x a "
+                                      "média); a borda direita não continua na esquerda: desenhe a camada com laço")
+
+
 def _detalhada(janela: bytes) -> bool:
     """Trecho com cores bastante e que não é textura periódica (pontilhado, listras)."""
     pixels = [janela[i:i + 4] for i in range(0, len(janela), 4)]
@@ -543,12 +597,14 @@ def revisar(
     fundo: "str | Path | Image.Image | None" = None,
     posicao: tuple[int, int] | None = None,
     estilo: "str | Estilo | None" = None,
+    laco: bool = False,
 ) -> Revisao:
     """Confere `imagem` pelas regras e devolve a `Revisao` (use `resumo()` para o texto).
 
     `camadas`: pasta ou lista de PNGs do fundo para a frente; sem ela, a pasta `<cena>/` ao lado
     do arquivo é usada se existir. `fundo`: cena por trás de um sprite, que vai em `posicao`
     (x, y do canto de cima; padrão: no meio). `estilo`: confere as cores contra a paleta.
+    `laco`: a cena dá a volta na horizontal; confere a emenda no composto e em cada camada.
     Arquivo que não abre ou tamanhos que não batem levantam `ValueError` ou `OSError`.
     """
     nome = Path(imagem).name if isinstance(imagem, (str, Path)) else "imagem"
@@ -615,6 +671,7 @@ def revisar(
         _serrilhado(silhuetas),
         _escala(cena),
         _repeticao(alvo),
+        _laco([("composto", alvo)] + lidas, laco),
     ]
     return Revisao(nome=nome, largura=alvo.width, altura=alvo.height, tipo=tipo, escala=escala,
                    camadas=[n for n, _ in lidas], checagens=checagens, imagem=alvo)

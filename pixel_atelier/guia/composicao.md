@@ -25,6 +25,11 @@ Cena de jogo em camadas: o fundo dá o clima, a camada da ação precisa ler em 
 - Fundo em laço repete por natureza; o problema é o mesmo objeto, igualzinho, 3 vezes à vista. Varie seed, tamanho e espaço.
 - `revisar`: alerta quando um trecho de **12x12** com detalhe aparece igual **3** ou mais vezes sem sobrepor (`JANELA`, `COPIAS`; heurística). 12 px é o tamanho de um objeto pequeno numa cena 320x180; 2 cópias ainda passam por padrão de ladrilho. Textura periódica, listras e pontilhado não contam.
 
+## Laço
+- Fundo de rolagem dá a volta: a coluna da borda direita encosta na da esquerda. Emenda visível (árvore cortada, degradê que não volta) pisca a cada volta da câmera.
+- `revisar --laco` (ou `laco` na ferramenta MCP; a imagem sozinha não diz se a cena dá a volta) mede a diferença de valor entre a coluna da direita e a da esquerda, no composto e em cada camada; pixel cheio contra vazio conta 1. Alerta quando a emenda passa de **3** vezes a média das diferenças entre colunas vizinhas (`LACO_EMENDA`) e também da maior delas. Num laço certo a emenda é só mais um par de colunas; 3 vezes a média deixa folga para a borda de um objeto que cai bem na emenda.
+- Conserto: a camada com `"laco": true` (padrão da receita), largura múltipla de 8.
+
 ## Como pedir
 - Camadas do fundo para a frente; `profundidade` de 1 (longe) a 0 (perto) puxa as cores para a atmosfera do estilo.
 - Separação entre camadas: afaste as `profundidade` de camadas vizinhas (0,85 e 0,65 já é pouco no noturno; 0,95 e 0,65 separa) ou troque o `papel` de uma delas.

@@ -34,10 +34,11 @@ from .receita import ErroDeReceita, descrever_formas
 from .referencia import CORES, ref
 from .revisao import revisar
 
-INSTRUCOES = ("Pixel art a partir de uma receita JSON curta. Veja descrever_formas e listar_estilos, "
-              "depois gerar e revisar. Estilo novo: ref numa imagem de referência. "
-              "Respostas em texto; abra o PNG só na aprovação final. "
-              "Dúvida de arte: guia (índice) e guia com o capítulo do assunto.")
+INSTRUCOES = ("Pixel art a partir de uma receita JSON curta. Primeiro passo, antes de qualquer outra "
+              "ferramenta: guia sem capítulo (o índice); depois só o capítulo do assunto da vez. "
+              "Então descrever_formas e listar_estilos, gerar e revisar (cena com laço: revisar com laco). "
+              "Estilo novo: ref numa imagem de referência. "
+              "Respostas em texto; abra o PNG só na aprovação final.")
 
 SO_LEITURA = ToolAnnotations(read_only_hint=True)
 
@@ -86,6 +87,7 @@ def criar_servidor(raiz: str | Path | None = None) -> MCPServer:
         posicao: Annotated[list[int] | None, Field(description="[x, y] do sprite no fundo (padrão: no meio)",
                                                    min_length=2, max_length=2)] = None,
         estilo: Annotated[str | None, Field(description="preset ou .json para conferir a paleta")] = None,
+        laco: Annotated[bool, Field(description="a cena dá a volta na horizontal: confere a emenda")] = False,
     ) -> str:
         """Confere a imagem pelas regras de pixel art e responde com o relatório: ok ou alerta por regra."""
         arquivo = dentro_da_raiz(raiz, imagem, "imagem")
@@ -95,7 +97,8 @@ def criar_servidor(raiz: str | Path | None = None) -> MCPServer:
             with estilos_so_em(raiz):
                 return revisar(arquivo, camadas=dentro_da_raiz(raiz, camadas, "camadas") if camadas else None,
                                fundo=dentro_da_raiz(raiz, fundo, "fundo") if fundo else None,
-                               posicao=tuple(posicao) if posicao else None, estilo=estilo).resumo()
+                               posicao=tuple(posicao) if posicao else None, estilo=estilo,
+                               laco=laco).resumo()
         except (OSError, KeyError, ValueError) as erro:
             raise ToolError(f"revisão não feita: {erro.args[0] if erro.args else erro}") from None
 
@@ -113,7 +116,7 @@ def criar_servidor(raiz: str | Path | None = None) -> MCPServer:
     def _guia(
         capitulo: Annotated[str | None, Field(description="nome do capítulo (sem ele, o índice)")] = None,
     ) -> str:
-        """Guia de pixel art: o índice dos capítulos ou um capítulo curto, com regras e números."""
+        """Guia de pixel art. Comece por aqui, sem capítulo (o índice); depois um capítulo curto do assunto."""
         try:
             return ler_capitulo(capitulo)
         except KeyError as erro:

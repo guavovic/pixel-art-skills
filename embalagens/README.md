@@ -18,6 +18,8 @@ pip install "pixel-atelier[mcp] @ git+https://github.com/guavovic/pixel-atelier"
 | `cursor/` | Cursor | regra `.cursor/rules/pixel-atelier.mdc`, aplicada quando o agente acha que o pedido pede, e servidor em `.cursor/mcp.json` | a pasta `.cursor/` na raiz do projeto, ou o servidor em `~/.cursor/mcp.json` |
 | `copilot/` | GitHub Copilot | `.github/copilot-instructions.md` e servidor em `.vscode/mcp.json` | as duas pastas na raiz do repositório; se ele já tiver `copilot-instructions.md`, junte o texto ao que existe |
 
+O comando `pixel-atelier` precisa estar no PATH de quem abre a ferramenta, porque é ela que sobe o servidor. No Windows, venv sem ativar ou `pip install --user` deixam o comando fora: abra a ferramenta com o venv ativado, instale com `pipx`, ou troque `command` no arquivo de MCP pelo caminho absoluto do executável (`...\Scripts\pixel-atelier.exe`).
+
 O servidor recebe a pasta do projeto pela variável de cada ferramenta (`${CLAUDE_PROJECT_DIR}`, `${workspacePath}`, `${workspaceFolder}`); no Codex ele sobe sem `--raiz`, na pasta onde o Codex abriu.
 
 Embalagem disponível não quer dizer testada: o teste em cada ferramenta é a issue #8.

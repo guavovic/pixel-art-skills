@@ -1,7 +1,7 @@
 """Linha de comando. Tudo responde em texto curto.
 
     python -m pixel_atelier gerar receita.json [--pasta saida]   # "-" lê a receita da entrada padrão
-    python -m pixel_atelier revisar cena.png [--fundo cena.png] [--estilo nome]   # relatório em texto
+    python -m pixel_atelier revisar cena.png [--fundo cena.png] [--estilo nome] [--laco]   # relatório em texto
     python -m pixel_atelier formas                               # campos da receita e parâmetros de cada forma, com o padrão
     python -m pixel_atelier estilos                              # presets disponíveis
     python -m pixel_atelier registrar-estilo estilo.json [--nome nome] [--sobrescrever]
@@ -46,7 +46,7 @@ def _gerar(args: argparse.Namespace) -> int:
 def _revisar(args: argparse.Namespace) -> int:
     try:
         revisao = revisar(args.imagem, camadas=args.camadas, fundo=args.fundo,
-                          posicao=tuple(args.posicao) if args.posicao else None, estilo=args.estilo)
+                          posicao=tuple(args.posicao) if args.posicao else None, estilo=args.estilo, laco=args.laco)
     except (OSError, KeyError, ValueError) as erro:
         print(f"revisão não feita: {erro.args[0] if erro.args else erro}", file=sys.stderr)
         return 2
@@ -119,6 +119,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--posicao", type=int, nargs=2, metavar=("X", "Y"),
                    help="canto do sprite no fundo (padrão: no meio)")
     p.add_argument("--estilo", help="confere as cores contra a paleta deste estilo")
+    p.add_argument("--laco", action="store_true", help="a cena dá a volta na horizontal: confere a emenda")
     p.set_defaults(funcao=_revisar)
 
     p = comandos.add_parser("formas", help="lista os campos da receita, as formas e os parâmetros")

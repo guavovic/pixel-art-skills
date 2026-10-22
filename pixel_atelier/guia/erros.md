@@ -17,6 +17,7 @@ O mais caro de todos: a arte não lê. O personagem some no cenário, ou o cená
 - Fundo apagado: faixa de valor do fundo (percentil 5 a 95) abaixo de **0,20** (`FAIXA_FUNDO`) é alerta, mesmo com a frente contrastando. 0,20 é a faixa do erro típico acima (fundo entre 0,05 e 0,25); os exemplos do pacote ficam entre 0,33 e 0,55.
 - Sprite sozinho: faixa de valor de pelo menos **0,30** (`FAIXA_SPRITE`), o mínimo para luz, tom médio e sombra separados em escala de cinza.
 - Contraste (linha `contraste`): **0,10** da frente contra o fundo e **0,05** entre camadas (ver `composicao`).
+- Com alerta, as duas linhas terminam com a ação: aumentar o contraste de valor da frente (clarear ou escurecer a frente ou o contorno), nunca escurecer nem apagar o fundo.
 
 ## Outros erros e onde ler
 | Erro | Sinal | Capítulo |
