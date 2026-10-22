@@ -35,7 +35,7 @@ def test_lista_as_ferramentas_so_com_texto(tmp_path):
             return (await cliente.list_tools()).tools
 
     ferramentas = {f.name: f for f in asyncio.run(rodar())}
-    assert set(ferramentas) == {"gerar", "descrever_formas", "listar_estilos", "registrar_estilo"}
+    assert set(ferramentas) == {"gerar", "revisar", "descrever_formas", "listar_estilos", "registrar_estilo"}
     assert all(f.output_schema is None for f in ferramentas.values())  # sem cópia estruturada do texto
     assert all(len(f.description) < 120 for f in ferramentas.values())
 
@@ -92,6 +92,18 @@ def test_caminho_absoluto_dentro_da_raiz_vale(tmp_path):
 def test_receita_que_nao_existe(tmp_path):
     erro, texto = chamar(criar_servidor(tmp_path), "gerar", receita="nada.json")
     assert erro and "'nada.json' não existe" in texto
+
+
+def test_revisar_responde_o_relatorio_em_texto(tmp_path):
+    servidor = criar_servidor(tmp_path)
+    chamar(servidor, "gerar", receita={**PEQUENA, "saida": "tudo"}, pasta="saida")
+    erro, texto = chamar(servidor, "revisar", imagem="saida/mcp.png", estilo="snes-diurno")
+    assert not erro and texto.startswith("mcp.png: 64x32, cena com 2 camadas")
+    assert "pixel solto:" in texto and "[heurística]" in texto
+    erro, texto = chamar(servidor, "revisar", imagem="saida/mcp.png", fundo="../fora.png")
+    assert erro and "fora da raiz" in texto
+    erro, texto = chamar(servidor, "revisar", imagem="nada.png")
+    assert erro and "'nada.png' não existe" in texto
 
 
 def test_descrever_formas_e_listar_estilos(tmp_path):

@@ -41,6 +41,7 @@ pixel-atelier mcp --raiz caminho/do/projeto   # ou python -m pixel_atelier mcp
 | Ferramenta | O que faz |
 | --- | --- |
 | `gerar` | desenha uma receita (objeto, texto JSON ou caminho) e grava os PNGs; responde com o resumo |
+| `revisar` | confere um PNG pelas regras de pixel art e responde com o relatório (ver Revisão) |
 | `descrever_formas` | formas e parâmetros, com o padrão |
 | `listar_estilos` | presets do pacote e do usuário |
 | `registrar_estilo` | guarda um estilo (objeto ou caminho `.json`) como preset com nome |
@@ -63,6 +64,44 @@ Configuração num cliente MCP genérico (o formato `mcpServers` que a maioria a
 ```
 
 Se o comando `pixel-atelier` não estiver no PATH do cliente, use `"command": "python"` com `"args": ["-m", "pixel_atelier", "mcp", "--raiz", "..."]`.
+
+## Revisão (issue #4)
+
+`revisao.py` confere a imagem pelas regras de pixel art e responde em texto, uma linha por regra: `ok`, `alerta` ou `pulada`, o número que justifica e onde. O agente lê o relatório no lugar da imagem e só abre o PNG na aprovação final.
+
+```
+python -m pixel_atelier revisar saida/vale.png [--estilo snes-diurno]     # acha as camadas em saida/vale/
+python -m pixel_atelier revisar heroi.png --fundo saida/vale.png [--posicao 40 120]
+```
+
+A receita `vale` acima, depois de `gerar`:
+
+```
+vale.png: 320x180, cena com 4 camadas, nenhum alerta
+ok cores: 28 (limite 64)
+ok contraste: frente (04-chao) x fundo 0.31 (mín 0.10); entre camadas mín 0.18 em 03-arvore (mín 0.03)
+ok legibilidade: frente some no fundo em 0% da borda (máx 25%); fundo com faixa de valor 0.32 (mín 0.15)
+ok pixel solto: 0 (0.00%, máx 0.5%)
+ok pillow shading [heurística]: 3 silhuetas, nenhuma com miolo 0.06+ mais claro que a borda nos 4 lados
+ok serrilhado [heurística]: 3 degraus fora do ritmo em 742 (0.4%, máx 6%); mais em 03-arvore (2, o primeiro em (246,145))
+ok escala [heurística]: bloco 1x em 148 de 148 ladrilhos 16x16
+ok composição repetida [heurística]: nenhum trecho 12x12 igual 3+ vezes
+```
+
+Com problema, a linha diz o quanto e onde, por exemplo `alerta legibilidade: frente some no fundo em 100% da borda (máx 25%), x15-32 y17-30; ...`.
+
+| Regra | Alerta quando |
+| --- | --- |
+| cores | mais de 16 num sprite ou 64 numa cena; com `--estilo`, cor fora da paleta |
+| contraste | mediana da diferença de valor na borda abaixo de 0,03 entre camadas ou 0,10 da frente contra o fundo |
+| legibilidade | a frente some (diferença < 0,05) em mais de 25% da borda, ou o fundo tem faixa de valor < 0,15 (fundo apagado: destaque por contraste, não escurecendo o fundo); sprite sozinho com faixa < 0,30 |
+| pixel solto | mais de 0,5% dos pixels (pontilhado não conta) |
+| pillow shading | borda 0,06+ mais escura que o miolo nos 4 lados por igual |
+| serrilhado | mais de 6% dos degraus da silhueta fora do ritmo (3,1,3 ou 1,3,1) |
+| escala | 2+ ladrilhos de 16x16 com bloco de pixel diferente do resto |
+| composição repetida | trecho de 12x12 com detalhe igual 3+ vezes |
+
+Valor é a luminância (o teste em escala de cinza). Contraste, legibilidade e silhuetas precisam das camadas (a pasta que `gerar` grava, achada sozinha, ou `--camadas`) ou de um `--fundo`; sem elas a regra sai como `pulada`. Imagem ampliada (`-3x.png`) é revisada no tamanho real. As regras marcadas `[heurística]` são aproximações: confira na aprovação final. Névoa e raios em pontilhado ficam fora do contraste, porque são transparentes de propósito. Os limiares ficam no topo de `revisao.py`.
 
 ## Uso
 
@@ -146,6 +185,7 @@ pip install -e .[dev]
 pytest
 python exemplos/montar_cena.py
 python -m pixel_atelier gerar exemplos/snes-diurno.json
+python -m pixel_atelier revisar exemplos/snes-diurno-3x.png
 ```
 
 Requer Python 3.11+ e Pillow. Sem numpy. O servidor MCP pede o pacote `mcp` (extra `[mcp]`, já incluso no `[dev]`). O servidor MCP pede o pacote `mcp` (extra `[mcp]`, já incluso no `[dev]`).

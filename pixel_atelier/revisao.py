@@ -1,0 +1,643 @@
+"""`revisar`: confere uma imagem pelas regras de pixel art e responde em texto curto.
+
+    from pixel_atelier import revisar
+
+    print(revisar("saida/vale.png").resumo())               # cena; acha as camadas em saida/vale/
+    print(revisar("heroi.png", fundo="saida/vale.png").resumo())  # sprite por cima de uma cena
+
+O relatório é o que o agente lê no lugar da imagem: uma linha por regra, `ok`, `alerta` ou
+`pulada`, com o número que justifica e onde (x, y em pixel real). O PNG só precisa ser aberto
+na aprovação final. Tudo é determinístico e só usa Pillow.
+
+O que entra:
+- cena (imagem opaca): com as camadas (a pasta `<cena>/` que `gerar` grava, achada sozinha, ou
+  `camadas=`), dá para medir contraste entre camadas, frente contra o fundo e silhuetas;
+- sprite (imagem com transparência): sozinho ou por cima de um `fundo`, em `posicao`;
+- imagem ampliada (blocos NxN, como `<cena>-3x.png`) volta para o tamanho real antes da revisão.
+
+Regras e limiares (as constantes abaixo). Valor é a luminância de `cor.luminancia`, de 0 a 1:
+olhar valor e não matiz é o teste da imagem em escala de cinza.
+- cores: até 16 num sprite e 64 numa cena; com `estilo`, cor fora da paleta também é alerta.
+  Pares de cores quase iguais (distância RGB < 4) aparecem no texto, sem virar alerta.
+- contraste: na borda de cada silhueta, a diferença de valor contra o que está atrás (o pixel da
+  borda ou o de dentro dele, o que contrastar mais, para o contorno escuro em fundo escuro não
+  contar como falha). Mediana de pelo menos 0,03 entre camadas e 0,10 da frente contra o fundo.
+- legibilidade: a frente some no fundo onde a diferença fica abaixo de 0,05; alerta se isso
+  passar de 25% da borda. Regra da casa: destacar por contraste, não apagar o fundo; fundo com
+  faixa de valor (percentil 5 a 95) abaixo de 0,15 é alerta de fundo apagado. Sprite sozinho
+  precisa de faixa de valor de pelo menos 0,30.
+- pixel solto: a mesma definição de `pintura.limpar_soltos` (os 4 vizinhos de uma mesma cor
+  diferente da dele), sem contar pontilhado (mesma cor na diagonal ou a 2 e 4 pixels). Alerta
+  acima de 0,5% dos pixels.
+- pillow shading (heurística): borda da silhueta mais escura que o miolo nos 4 lados (0,06 ou
+  mais) e lados parecidos entre si (até 0,04). Luz de um lado só não cai aqui.
+- serrilhado (heurística): no perfil de cada lado da silhueta, um degrau com comprimento fora do
+  ritmo dos vizinhos (3,1,3 ou 1,3,1; diferença de 2 ou mais). Alerta acima de 6% dos degraus.
+- escala (heurística): em ladrilhos de 16x16 com 3 ou mais comprimentos de trecho de cor, o
+  máximo divisor comum deles é o bloco; dois ou mais ladrilhos com bloco diferente do resto é
+  alerta (sprite ampliado no meio da cena).
+- composição repetida (heurística): trecho de 12x12 que aparece igual 3 vezes ou mais, sem
+  sobrepor. Só conta trecho com detalhe: 4 cores ou mais, nenhuma em mais de 60% e pelo menos 6
+  linhas e 6 colunas diferentes (tronco e faixa não contam); textura periódica e pontilhado (mais
+  de 25% de blocos 2x2 em xadrez) também não.
+
+Os limiares são de partida, escolhidos para os exemplos do pacote passarem sem alerta; o guia de
+artista (#6) pode trocar por números melhores.
+
+Camada de atmosfera (névoa e raios em pontilhado: mais borda do que miolo) fica fora do
+contraste e das silhuetas, porque ela é transparente de propósito.
+"""
+from __future__ import annotations
+
+import math
+from collections import Counter
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any, Iterable, Sequence
+
+from PIL import Image
+
+from .cor import distancia2, luminancia, rgb_para_hex
+from .estilo import Estilo, carregar_estilo
+from .imagem import compor
+
+CORES_SPRITE = 16
+CORES_CENA = 64  # o SNES põe até 128 cores de fundo na tela (8 subpaletas de 16); 64 deixa folga sem virar foto
+QUASE_IGUAL = 4  # distância RGB abaixo disso: duas cores que o olho não separa (só informa)
+CONTRASTE_CAMADAS = 0.03  # o fundo pode ter pouco contraste (perspectiva atmosférica), não nenhum
+CONTRASTE_FRENTE = 0.10
+SOME = 0.05  # diferença de valor abaixo disso: a borda some no fundo
+SOME_MAX = 0.25
+FAIXA_FUNDO = 0.15
+FAIXA_SPRITE = 0.30
+SOLTOS_MAX = 0.005
+PILLOW_MIOLO = 0.06
+PILLOW_LADOS = 0.04
+SERRILHADO_MAX = 0.06
+LADRILHO = 16
+LADRILHOS_FORA = 2
+JANELA = 12
+JANELA_CORES = 4
+JANELA_DOMINANTE = 0.6  # trecho com uma cor em mais disso é liso demais para contar como cópia
+JANELA_VARIADA = 6  # linhas e colunas diferentes que o trecho precisa ter
+COPIAS = 3
+ATMOSFERA = 0.5  # camada com mais pixels de borda do que isso (fração) é névoa ou raio pontilhado
+
+VIZINHOS = ((1, 0), (-1, 0), (0, 1), (0, -1))
+LADOS = {(0, -1): "topo", (0, 1): "base", (-1, 0): "esquerda", (1, 0): "direita"}
+
+
+@dataclass
+class Checagem:
+    regra: str
+    estado: str  # "ok", "alerta" ou "pulada"
+    detalhe: str
+    heuristica: bool = False
+
+    def linha(self) -> str:
+        return f"{self.estado} {self.regra}{' [heurística]' if self.heuristica else ''}: {self.detalhe}"
+
+
+@dataclass
+class Revisao:
+    nome: str
+    largura: int
+    altura: int
+    tipo: str  # "cena", "sprite" ou "sprite sobre fundo"
+    escala: int  # 1, ou N quando a imagem veio ampliada N vezes
+    camadas: list[str]
+    checagens: list[Checagem]
+    imagem: Image.Image = field(repr=False)
+
+    def alertas(self) -> list[Checagem]:
+        return [c for c in self.checagens if c.estado == "alerta"]
+
+    def resumo(self) -> str:
+        """Uma linha de cabeçalho e uma por regra."""
+        partes = [f"{self.nome}: {self.largura}x{self.altura}, {self.tipo}"]
+        if self.camadas:
+            partes[0] += f" com {len(self.camadas)} camadas"
+        if self.escala > 1:
+            partes.append(f"ampliada {self.escala}x (revisada no tamanho real)")
+        quantos = len(self.alertas())
+        partes.append("nenhum alerta" if not quantos else f"{quantos} alerta{'s' if quantos > 1 else ''}")
+        return "\n".join([", ".join(partes)] + [c.linha() for c in self.checagens])
+
+    def para_dicionario(self) -> dict[str, Any]:
+        return {
+            "nome": self.nome, "tamanho": [self.largura, self.altura], "tipo": self.tipo, "escala": self.escala,
+            "camadas": self.camadas,
+            "checagens": [{"regra": c.regra, "estado": c.estado, "detalhe": c.detalhe, "heuristica": c.heuristica}
+                          for c in self.checagens],
+        }
+
+
+# --- leitura -------------------------------------------------------------------------------------
+
+def _abrir(imagem: "str | Path | Image.Image") -> Image.Image:
+    if isinstance(imagem, Image.Image):
+        return imagem.convert("RGBA")
+    with Image.open(imagem) as aberta:
+        return aberta.convert("RGBA")
+
+
+def escala_inteira(imagem: Image.Image) -> int:
+    """N quando a imagem é toda feita de blocos NxN (ampliada por vizinho mais próximo), senão 1."""
+    if len(imagem.getcolors(maxcolors=2) or []) == 1:
+        return 1  # cor única: qualquer N serviria
+    px = imagem.load()
+    largura, altura = imagem.size
+    n = 0
+    for linhas, colunas, ponto in ((altura, largura, lambda a, b: px[b, a]), (largura, altura, lambda a, b: px[a, b])):
+        for a in range(linhas):
+            inicio = 0
+            for b in range(1, colunas + 1):
+                if b == colunas or ponto(a, b) != ponto(a, b - 1):
+                    n = math.gcd(n, b - inicio)
+                    if n == 1:
+                        return 1
+                    inicio = b
+    # blocos grandes demais ou imagem que encolheria para menos de 16 pixels: é arte chapada, não ampliada
+    return n if n <= 16 and min(largura, altura) // n >= 16 else 1
+
+
+def _reduzir(imagem: Image.Image, n: int) -> Image.Image:
+    return imagem if n == 1 else imagem.resize((imagem.width // n, imagem.height // n), Image.Resampling.NEAREST)
+
+
+def _camadas_ao_lado(arquivo: Path) -> list[Path]:
+    """As camadas que `gerar` grava: `<cena>/NN-nome.png` ao lado de `<cena>.png` ou `<cena>-Nx.png`."""
+    nome = arquivo.stem
+    base, _, sufixo = nome.rpartition("-")
+    if base and sufixo.endswith("x") and sufixo[:-1].isdigit():
+        nome = base
+    pasta = arquivo.parent / nome
+    return sorted(pasta.glob("[0-9][0-9]-*.png")) if pasta.is_dir() else []
+
+
+def _ler_camadas(camadas: "str | Path | Sequence[str | Path | Image.Image]") -> list[tuple[str, Image.Image]]:
+    if isinstance(camadas, (str, Path)):
+        pasta = Path(camadas)
+        if not pasta.is_dir():
+            raise ValueError(f"pasta de camadas {pasta.as_posix()} não existe")
+        camadas = sorted(pasta.glob("*.png"))
+        if not camadas:
+            raise ValueError(f"nenhum PNG na pasta de camadas {pasta.as_posix()}")
+    lidas = []
+    for i, c in enumerate(camadas):
+        nome = Path(c).stem if isinstance(c, (str, Path)) else f"{i + 1:02d}"
+        lidas.append((nome, _abrir(c)))
+    return lidas
+
+
+# --- medidas de apoio ----------------------------------------------------------------------------
+
+class _Px:
+    """Pixels de uma imagem RGBA com acesso rápido a cor, alfa e valor."""
+
+    def __init__(self, imagem: Image.Image):
+        self.largura, self.altura = imagem.size
+        self.px = imagem.load()
+        self._valor: dict[tuple[int, ...], float] = {}
+
+    def dentro(self, x: int, y: int) -> bool:
+        return 0 <= x < self.largura and 0 <= y < self.altura
+
+    def cheio(self, x: int, y: int) -> bool:
+        return self.dentro(x, y) and self.px[x, y][3] > 0
+
+    def valor(self, x: int, y: int) -> float:
+        cor = self.px[x, y]
+        v = self._valor.get(cor)
+        if v is None:
+            v = self._valor[cor] = luminancia(cor)
+        return v
+
+
+def _percentil(valores: Sequence[float], p: float) -> float:
+    ordenados = sorted(valores)
+    return ordenados[min(len(ordenados) - 1, int(p * len(ordenados)))]
+
+
+def _mediana(valores: Sequence[float]) -> float:
+    return _percentil(valores, 0.5)
+
+
+def _regiao(pontos: Iterable[tuple[int, int]]) -> str:
+    pontos = list(pontos)
+    xs, ys = [p[0] for p in pontos], [p[1] for p in pontos]
+    return f"x{min(xs)}-{max(xs)} y{min(ys)}-{max(ys)}"
+
+
+def _faixa(valores: Sequence[float]) -> float:
+    return _percentil(valores, 0.95) - _percentil(valores, 0.05) if valores else 0.0
+
+
+def _borda(frente: _Px, tras: _Px) -> list[tuple[int, int, float]]:
+    """(x, y, diferença de valor) em cada passo da silhueta da frente para fora, contra o de trás."""
+    saida = []
+    for y in range(frente.altura):
+        for x in range(frente.largura):
+            if not frente.cheio(x, y):
+                continue
+            for dx, dy in VIZINHOS:
+                fx, fy = x + dx, y + dy
+                if not frente.dentro(fx, fy) or frente.cheio(fx, fy) or not tras.cheio(fx, fy):
+                    continue
+                atras = tras.valor(fx, fy)
+                diferenca = abs(frente.valor(x, y) - atras)
+                if frente.cheio(x - dx, y - dy):  # o de dentro: contorno escuro em fundo escuro
+                    diferenca = max(diferenca, abs(frente.valor(x - dx, y - dy) - atras))
+                saida.append((fx, fy, diferenca))
+    return saida
+
+
+def _profundidade(silhueta: _Px) -> dict[tuple[int, int], int]:
+    """Distância (em passos de 4 vizinhos) de cada pixel cheio até o vazio; 1 é a borda."""
+    atual = []
+    prof: dict[tuple[int, int], int] = {}
+    for y in range(silhueta.altura):
+        for x in range(silhueta.largura):
+            if silhueta.cheio(x, y) and any(silhueta.dentro(x + dx, y + dy) and not silhueta.cheio(x + dx, y + dy)
+                                            for dx, dy in VIZINHOS):
+                prof[(x, y)] = 1
+                atual.append((x, y))
+    nivel = 1
+    while atual:
+        nivel += 1
+        proximo = []
+        for x, y in atual:
+            for dx, dy in VIZINHOS:
+                p = (x + dx, y + dy)
+                if p not in prof and silhueta.cheio(*p):
+                    prof[p] = nivel
+                    proximo.append(p)
+        atual = proximo
+    return prof
+
+
+def _atmosfera(silhueta: _Px, prof: dict[tuple[int, int], int]) -> bool:
+    cheios = sum(1 for y in range(silhueta.altura) for x in range(silhueta.largura) if silhueta.cheio(x, y))
+    borda = sum(1 for v in prof.values() if v == 1)
+    return cheios == 0 or borda > ATMOSFERA * cheios
+
+
+# --- regras --------------------------------------------------------------------------------------
+
+def _cores(alvo: Image.Image, limite: int, estilo: Estilo | None) -> Checagem:
+    contagem = alvo.getcolors(maxcolors=alvo.width * alvo.height) or []
+    cores = sorted({(r, g, b) for _, (r, g, b, a) in contagem if a > 0})
+    if len(cores) > 256:
+        return Checagem("cores", "alerta", f"{len(cores)}: não parece pixel art (borrado, anti-alias ou JPEG?)")
+    detalhe = f"{len(cores)} (limite {limite})"
+    alerta = len(cores) > limite
+    pares = [(a, b) for i, a in enumerate(cores) for b in cores[i + 1:] if distancia2(a, b) < QUASE_IGUAL ** 2]
+    if pares:
+        a, b = pares[0]
+        quantos = f"{len(pares)} pares quase iguais" if len(pares) > 1 else "1 par quase igual"
+        detalhe += f"; {quantos} ({rgb_para_hex(a)}~{rgb_para_hex(b)})"
+    if estilo is not None:
+        fora = [c for c in cores if c not in set(estilo.paleta)]
+        if fora:
+            alerta = True
+            detalhe += f"; {len(fora)} fora da paleta de {estilo.nome} ({rgb_para_hex(fora[0])})"
+    return Checagem("cores", "alerta" if alerta else "ok", detalhe)
+
+
+def _contraste(pares: list[tuple[str, list[tuple[int, int, float]]]]) -> Checagem:
+    if not pares:
+        return Checagem("contraste", "pulada", "sem camadas nem fundo (passe camadas ou fundo)")
+    medianas = [(nome, _mediana([d for _, _, d in borda])) for nome, borda in pares]
+    *trás, (nome_frente, frente) = medianas
+    ruins = [(n, m) for n, m in trás if m < CONTRASTE_CAMADAS]
+    rotulo = "sprite" if nome_frente == "sprite" else f"frente ({nome_frente})"
+    partes = [f"{rotulo} x fundo {frente:.2f} (mín {CONTRASTE_FRENTE:.2f})"]
+    if trás:
+        pior = min(trás, key=lambda t: t[1])
+        partes.append(f"entre camadas mín {pior[1]:.2f} em {pior[0]} (mín {CONTRASTE_CAMADAS:.2f})")
+    if ruins:
+        partes.append("baixo em " + ", ".join(f"{n} {m:.2f}" for n, m in ruins[:3]))
+    alerta = frente < CONTRASTE_FRENTE or bool(ruins)
+    return Checagem("contraste", "alerta" if alerta else "ok", "; ".join(partes))
+
+
+def _legibilidade(borda_frente: list[tuple[int, int, float]] | None, fundo: _Px | None,
+                  alvo: _Px | None, rotulo: str = "frente") -> Checagem:
+    if borda_frente is not None and fundo is not None:
+        somem = [(x, y) for x, y, d in borda_frente if d < SOME]
+        fracao = len(somem) / len(borda_frente)
+        valores = [fundo.valor(x, y) for y in range(fundo.altura) for x in range(fundo.largura) if fundo.cheio(x, y)]
+        faixa = _faixa(valores)
+        partes = [f"{rotulo} some no fundo em {fracao:.0%} da borda (máx {SOME_MAX:.0%})"]
+        if fracao > SOME_MAX:
+            partes[0] += f", {_regiao(somem)}"
+        partes.append(f"fundo com faixa de valor {faixa:.2f} (mín {FAIXA_FUNDO:.2f})")
+        if faixa < FAIXA_FUNDO:
+            partes.append("fundo apagado: destaque a frente por contraste, não escurecendo o fundo")
+        alerta = fracao > SOME_MAX or faixa < FAIXA_FUNDO
+        return Checagem("legibilidade", "alerta" if alerta else "ok", "; ".join(partes))
+    if alvo is not None:
+        valores = [alvo.valor(x, y) for y in range(alvo.altura) for x in range(alvo.largura) if alvo.cheio(x, y)]
+        faixa = _faixa(valores)
+        detalhe = f"faixa de valor do sprite {faixa:.2f} (mín {FAIXA_SPRITE:.2f}; teste em escala de cinza)"
+        return Checagem("legibilidade", "alerta" if faixa < FAIXA_SPRITE else "ok", detalhe)
+    return Checagem("legibilidade", "pulada", "sem camadas nem fundo (passe camadas ou fundo)")
+
+
+def _soltos(alvo: _Px) -> Checagem:
+    px = alvo.px
+    soltos, total = [], 0
+    for y in range(1, alvo.altura - 1):
+        for x in range(1, alvo.largura - 1):
+            atual = px[x, y]
+            if atual[3]:
+                total += 1
+            primeiro = px[x + 1, y]
+            if primeiro == atual or not all(px[x + dx, y + dy] == primeiro for dx, dy in VIZINHOS[1:]):
+                continue
+            if primeiro[3] == 0 and atual[3] == 0:
+                continue
+            # pontilhado: a mesma cor volta na diagonal ou no passo do padrão de Bayer
+            if any(alvo.dentro(x + dx, y + dy) and px[x + dx, y + dy] == atual
+                   for dx, dy in ((1, 1), (1, -1), (-1, 1), (-1, -1), (2, 2), (2, -2), (-2, 2), (-2, -2),
+                                  (4, 0), (-4, 0), (0, 4), (0, -4), (2, 0), (-2, 0), (0, 2), (0, -2))):
+                continue
+            soltos.append((x, y))
+    fracao = len(soltos) / max(1, total)
+    detalhe = f"{len(soltos)} ({fracao:.2%}, máx {SOLTOS_MAX:.1%})"
+    if soltos:
+        detalhe += " em " + " ".join(f"({x},{y})" for x, y in soltos[:3]) + (" ..." if len(soltos) > 3 else "")
+    return Checagem("pixel solto", "alerta" if fracao > SOLTOS_MAX else "ok", detalhe)
+
+
+def _pillow(silhuetas: list[tuple[str, _Px, dict[tuple[int, int], int]]]) -> Checagem:
+    if not silhuetas:
+        return Checagem("pillow shading", "pulada", "sem silhueta (passe camadas ou um sprite)", True)
+    achadas, conferidas = [], 0
+    for nome, s, prof in silhuetas:
+        borda = [p for p, v in prof.items() if v == 1]
+        cores = Counter(s.px[x, y] for x, y in borda)
+        cor, quantas = cores.most_common(1)[0]
+        resto = [s.valor(*p) for p, v in prof.items() if v > 1]
+        casca = 1
+        if resto and quantas >= 0.85 * len(borda) and luminancia(cor) < _mediana(resto):
+            casca = 2  # a borda é o contorno: o sombreado começa um pixel para dentro
+        lados: dict[str, list[float]] = {lado: [] for lado in LADOS.values()}
+        miolo = []
+        for (x, y), v in prof.items():
+            if v >= casca + 2:
+                miolo.append(s.valor(x, y))
+            elif v == casca:
+                for (dx, dy), lado in LADOS.items():  # a beira da imagem não é lado da silhueta
+                    if s.dentro(x + dx, y + dy) and prof.get((x + dx, y + dy), 0) < casca:
+                        lados[lado].append(s.valor(x, y))
+        if len(miolo) < 8 or any(len(v) < 4 for v in lados.values()):
+            continue
+        conferidas += 1
+        medias = [sum(v) / len(v) for v in lados.values()]
+        centro = sum(miolo) / len(miolo)
+        if max(medias) <= centro - PILLOW_MIOLO and max(medias) - min(medias) <= PILLOW_LADOS:
+            achadas.append(f"{nome}: borda {centro - max(medias):.2f} mais escura que o miolo nos 4 lados")
+    if achadas:
+        return Checagem("pillow shading", "alerta", "; ".join(achadas[:3]) + "; luz de um lado só", True)
+    if not conferidas:
+        return Checagem("pillow shading", "pulada", "nenhuma silhueta fechada grande o bastante", True)
+    return Checagem("pillow shading", "ok", f"{conferidas} silhueta{'s' if conferidas > 1 else ''}, nenhuma com "
+                    f"miolo {PILLOW_MIOLO:.2f}+ mais claro que a borda nos 4 lados", True)
+
+
+def _perfis(s: _Px) -> Iterable[list[tuple[int, int, tuple[int, int]]]]:
+    """Perfil de cada lado da silhueta, visto de fora: trechos contínuos de (posição, distância, pixel)."""
+    L, A = s.largura, s.altura
+    varreduras = (
+        (L, A, lambda a, b: (a, b)),             # topo: coluna a, de cima para baixo
+        (L, A, lambda a, b: (a, A - 1 - b)),     # base
+        (A, L, lambda a, b: (b, a)),             # esquerda: linha a, da esquerda para a direita
+        (A, L, lambda a, b: (L - 1 - b, a)),     # direita
+    )
+    for externos, internos, ponto in varreduras:
+        perfil: list[tuple[int, int, tuple[int, int]]] = []
+        for a in range(externos):
+            achado = next((b for b in range(internos) if s.cheio(*ponto(a, b))), None)
+            if achado is None:
+                if perfil:
+                    yield perfil
+                perfil = []
+                continue
+            perfil.append((a, achado, ponto(a, achado)))
+        if perfil:
+            yield perfil
+
+
+def _serrilhado(silhuetas: list[tuple[str, _Px, dict[tuple[int, int], int]]]) -> Checagem:
+    if not silhuetas:
+        return Checagem("serrilhado", "pulada", "sem silhueta (passe camadas ou um sprite)", True)
+    quebrados: list[tuple[str, tuple[int, int]]] = []
+    degraus = 0
+    for nome, s, _ in silhuetas:
+        for perfil in _perfis(s):
+            trechos: list[list[Any]] = []  # [comprimento, distância, primeiro pixel], um por degrau
+            for _, h, pixel in perfil:
+                if trechos and trechos[-1][1] == h:
+                    trechos[-1][0] += 1
+                else:
+                    trechos.append([1, h, pixel])
+            degraus += len(trechos)
+            for antes, meio, depois in zip(trechos, trechos[1:], trechos[2:]):
+                passo = meio[1] - antes[1]
+                if abs(passo) != 1 or depois[1] - meio[1] != passo:
+                    continue  # só dentro de uma linha inclinada, degrau de 1 pixel
+                d1, d2 = meio[0] - antes[0], depois[0] - meio[0]
+                if d1 * d2 < 0 and min(abs(d1), abs(d2)) >= 2:
+                    quebrados.append((nome, meio[2]))
+    fracao = len(quebrados) / max(1, degraus)
+    detalhe = f"{len(quebrados)} degraus fora do ritmo em {degraus} ({fracao:.1%}, máx {SERRILHADO_MAX:.0%})"
+    if quebrados:
+        nome, quantos = Counter(n for n, _ in quebrados).most_common(1)[0]
+        x, y = next(p for n, p in quebrados if n == nome)
+        detalhe += f"; mais em {nome} ({quantos}, o primeiro em ({x},{y}))"
+    return Checagem("serrilhado", "alerta" if fracao > SERRILHADO_MAX else "ok", detalhe, True)
+
+
+def _bloco_do_ladrilho(px, x0: int, y0: int, x1: int, y1: int) -> tuple[int, int]:
+    """(máximo divisor comum, quantos comprimentos diferentes) dos trechos de cor inteiros no ladrilho."""
+    n = 0
+    comprimentos: set[int] = set()
+    for linhas, ponto in (((y0, y1, x0, x1), lambda a, b: px[b, a]), ((x0, x1, y0, y1), lambda a, b: px[a, b])):
+        a0, a1, b0, b1 = linhas
+        for a in range(a0, a1):
+            inicio = None
+            for b in range(b0 + 1, b1):
+                if ponto(a, b) != ponto(a, b - 1):
+                    if inicio is not None:
+                        n = math.gcd(n, b - inicio)
+                        comprimentos.add(b - inicio)
+                    inicio = b
+    return n, len(comprimentos)
+
+
+def _escala(cena: Image.Image) -> Checagem:
+    px = cena.load()
+    blocos: dict[tuple[int, int], int] = {}
+    for y0 in range(0, cena.height - LADRILHO + 1, LADRILHO):
+        for x0 in range(0, cena.width - LADRILHO + 1, LADRILHO):
+            n, variedade = _bloco_do_ladrilho(px, x0, y0, x0 + LADRILHO, y0 + LADRILHO)
+            if variedade >= 3:  # pontilhado e listras repetem um comprimento só e não contam
+                blocos[(x0, y0)] = n
+    if not blocos:
+        return Checagem("escala", "pulada", "pouco detalhe para medir", True)
+    comum = Counter(blocos.values()).most_common(1)[0][0]
+    fora = [p for p, n in blocos.items() if n != comum]
+    detalhe = f"bloco {comum}x em {len(blocos) - len(fora)} de {len(blocos)} ladrilhos {LADRILHO}x{LADRILHO}"
+    if fora:
+        outros = Counter(blocos[p] for p in fora).most_common(1)[0][0]
+        detalhe += f"; {len(fora)} com bloco {outros}x em {_regiao(fora)} (máx {LADRILHOS_FORA - 1})"
+    return Checagem("escala", "alerta" if len(fora) >= LADRILHOS_FORA else "ok", detalhe, True)
+
+
+def _repeticao(alvo: Image.Image) -> Checagem:
+    largura, altura = alvo.size
+    if largura < JANELA or altura < JANELA:
+        return Checagem("composição repetida", "pulada", f"imagem menor que {JANELA}x{JANELA}", True)
+    dados = alvo.tobytes()
+    passo, w = largura * 4, JANELA * 4
+    grupos: dict[bytes, list[tuple[int, int]]] = {}
+    for y in range(altura - JANELA + 1):
+        linhas = [dados[(y + r) * passo:(y + r + 1) * passo] for r in range(JANELA)]
+        for x in range(largura - JANELA + 1):
+            chave = b"".join(linha[x * 4:x * 4 + w] for linha in linhas)
+            grupos.setdefault(chave, []).append((x, y))
+    objetos: dict[tuple[tuple[int, int], ...], list[tuple[int, int]]] = {}
+    for chave, posicoes in grupos.items():
+        if len(posicoes) < COPIAS:
+            continue
+        copias: list[tuple[int, int]] = []
+        for x, y in posicoes:  # em ordem de leitura; guarda só cópias que não se sobrepõem
+            if all(abs(x - cx) >= JANELA or abs(y - cy) >= JANELA for cx, cy in copias):
+                copias.append((x, y))
+        if len(copias) < COPIAS or not _detalhada(chave):
+            continue
+        x0, y0 = copias[0]
+        deslocamentos = tuple((x - x0, y - y0) for x, y in copias)
+        objetos.setdefault(deslocamentos, []).append((x0, y0))
+    if not objetos:
+        return Checagem("composição repetida", "ok",
+                        f"nenhum trecho {JANELA}x{JANELA} igual {COPIAS}+ vezes", True)
+    deslocamentos, origens = max(objetos.items(), key=lambda item: (len(item[0]), len(item[1])))
+    x0, y0 = min(origens)
+    lugares = " ".join(f"({x0 + dx},{y0 + dy})" for dx, dy in deslocamentos[:4])
+    detalhe = (f"{len(objetos)} trecho{'s' if len(objetos) > 1 else ''} repetido{'s' if len(objetos) > 1 else ''}; "
+               f"maior: {len(deslocamentos)} cópias em {lugares}{' ...' if len(deslocamentos) > 4 else ''}")
+    return Checagem("composição repetida", "alerta", detalhe, True)
+
+
+def _detalhada(janela: bytes) -> bool:
+    """Trecho com cores bastante e que não é textura periódica (pontilhado, listras)."""
+    pixels = [janela[i:i + 4] for i in range(0, len(janela), 4)]
+    contagem = Counter(pixels)
+    if len(contagem) < JANELA_CORES or contagem.most_common(1)[0][1] > JANELA_DOMINANTE * len(pixels):
+        return False  # pouca cor ou quase tudo de uma cor só: céu, chão liso, beira reta
+    linhas = {tuple(pixels[r * JANELA:(r + 1) * JANELA]) for r in range(JANELA)}
+    colunas = {tuple(pixels[c::JANELA]) for c in range(JANELA)}
+    if min(len(linhas), len(colunas)) < JANELA_VARIADA:
+        return False  # quase igual numa direção: tronco, faixa, degradê
+    xadrez = 0  # blocos 2x2 em xadrez (a b / b a): muito disso é pontilhado, que se repete sozinho
+    for r in range(JANELA - 1):
+        for c in range(JANELA - 1):
+            a, b = pixels[r * JANELA + c], pixels[r * JANELA + c + 1]
+            xadrez += a != b and pixels[(r + 1) * JANELA + c] == b and pixels[(r + 1) * JANELA + c + 1] == a
+    if xadrez > 0.25 * (JANELA - 1) ** 2:
+        return False
+    for p in range(1, JANELA // 2 + 1):  # igual a si mesma andando p pixels: listra ou textura
+        n = len(pixels)
+        if all(pixels[i] == pixels[i + p] for i in range(n - p) if i % JANELA < JANELA - p):
+            return False
+        if all(pixels[i] == pixels[i + p * JANELA] for i in range(n - p * JANELA)):
+            return False
+    return True
+
+
+# --- entrada -------------------------------------------------------------------------------------
+
+def revisar(
+    imagem: "str | Path | Image.Image",
+    *,
+    camadas: "str | Path | Sequence[str | Path | Image.Image] | None" = None,
+    fundo: "str | Path | Image.Image | None" = None,
+    posicao: tuple[int, int] | None = None,
+    estilo: "str | Estilo | None" = None,
+) -> Revisao:
+    """Confere `imagem` pelas regras e devolve a `Revisao` (use `resumo()` para o texto).
+
+    `camadas`: pasta ou lista de PNGs do fundo para a frente; sem ela, a pasta `<cena>/` ao lado
+    do arquivo é usada se existir. `fundo`: cena por trás de um sprite, que vai em `posicao`
+    (x, y do canto de cima; padrão: no meio). `estilo`: confere as cores contra a paleta.
+    Arquivo que não abre ou tamanhos que não batem levantam `ValueError` ou `OSError`.
+    """
+    nome = Path(imagem).name if isinstance(imagem, (str, Path)) else "imagem"
+    original = _abrir(imagem)
+    if isinstance(estilo, str):
+        estilo = carregar_estilo(estilo)
+
+    lidas: list[tuple[str, Image.Image]] = []
+    if fundo is None:
+        if camadas is None and isinstance(imagem, (str, Path)):
+            camadas = _camadas_ao_lado(Path(imagem)) or None
+        if camadas is not None:
+            lidas = _ler_camadas(camadas)
+    if lidas:  # as camadas dizem o tamanho real
+        tamanho = lidas[0][1].size
+        escala = original.width // tamanho[0] or 1
+        for n, c in lidas:
+            if c.size != tamanho or (c.width * escala, c.height * escala) != original.size:
+                raise ValueError(f"camada {n} tem {c.width}x{c.height} e a imagem {original.width}x{original.height}")
+    else:
+        escala = escala_inteira(original)
+    alvo = _reduzir(original, escala)
+
+    sprite = alvo.getchannel("A").getextrema()[0] < 255 and not lidas
+    # planos: (nome, a camada, o que está atrás dela)
+    if fundo is not None:
+        tras = _abrir(fundo)
+        tras = _reduzir(tras, escala_inteira(tras))
+        if alvo.width > tras.width or alvo.height > tras.height:
+            raise ValueError(f"sprite {alvo.width}x{alvo.height} maior que o fundo {tras.width}x{tras.height}")
+        x, y = posicao or ((tras.width - alvo.width) // 2, (tras.height - alvo.height) // 2)
+        frente = Image.new("RGBA", tras.size, (0, 0, 0, 0))
+        frente.paste(alvo, (x, y))
+        planos = [("sprite", frente, tras)]
+        tipo, cena = "sprite sobre fundo", Image.alpha_composite(tras, frente)
+    else:
+        planos = [(n, c, compor([c2 for _, c2 in lidas[:i]])) for i, (n, c) in enumerate(lidas) if i > 0]
+        tipo, cena = ("sprite" if sprite else "cena"), alvo
+
+    silhuetas: list[tuple[str, _Px, dict[tuple[int, int], int]]] = []
+    pares: list[tuple[str, list[tuple[int, int, float]]]] = []
+    fundo_px = None
+    for n, camada, atras in planos:
+        f = _Px(camada)
+        prof = _profundidade(f)
+        if fundo is None and _atmosfera(f, prof):
+            continue  # névoa e raios pontilhados são transparentes de propósito
+        borda = _borda(f, atras_px := _Px(atras))
+        if borda:
+            pares.append((n, borda))
+            silhuetas.append((n, f, prof))
+            fundo_px = atras_px  # o da última camada com borda: o fundo da frente
+    alvo_px = _Px(alvo)
+    if tipo == "sprite":
+        silhuetas.append(("sprite", alvo_px, _profundidade(alvo_px)))
+
+    checagens = [
+        _cores(alvo, CORES_SPRITE if sprite else CORES_CENA, estilo),
+        _contraste(pares),
+        _legibilidade(pares[-1][1] if pares else None, fundo_px, alvo_px if tipo == "sprite" else None,
+                      "sprite" if fundo is not None else "frente"),
+        _soltos(alvo_px),
+        _pillow(silhuetas),
+        _serrilhado(silhuetas),
+        _escala(cena),
+        _repeticao(alvo),
+    ]
+    return Revisao(nome=nome, largura=alvo.width, altura=alvo.height, tipo=tipo, escala=escala,
+                   camadas=[n for n, _ in lidas], checagens=checagens, imagem=alvo)
