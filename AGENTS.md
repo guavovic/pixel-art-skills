@@ -14,7 +14,7 @@ Ateliê de pixel art para agentes. O motor (`pixel_atelier/`) guarda a técnica:
 1. **Estilo**: um preset (`estilos`) ou um novo tirado de uma imagem de referência (`ref referencia.png --nome nome`). A imagem de referência é vista uma vez; depois só o nome.
 2. **Receita**: camadas do fundo para a frente, com `forma`, `profundidade` e parâmetros. Formato em `docs/referencia.md`, seção Receita.
 3. **Gerar**: `python -m pixel_atelier gerar receita.json --pasta saida`. Responde com o resumo (arquivos, cores, cada camada).
-4. **Revisar em texto**: `python -m pixel_atelier revisar saida/<cena>.png` (cena com laço: `--laco`, ou `laco` na ferramenta MCP, para conferir a emenda). Uma linha por regra (`ok`, `alerta`, `pulada`) com o número e onde. Alerta: ajuste a receita e gere de novo. O capítulo de cada regra está no índice do guia.
+4. **Revisar em texto**: `python -m pixel_atelier revisar saida/<cena>.png`. O laço se confere sozinho: o `gerar` grava no PNG se a cena tem laço e o `revisar` lê essa marca (`--laco`, ou `laco` na ferramenta MCP, só para forçar numa imagem sem a marca). Uma linha por regra (`ok`, `alerta`, `pulada`) com o número e onde. Alerta: ajuste a receita e gere de novo. O capítulo de cada regra está no índice do guia.
 5. **Aprovação final**: só aqui abra o PNG (o ampliado, `<cena>-Nx.png`) e confira o que é `[heurística]`.
 
 Pelo servidor MCP o fluxo é o mesmo: `guia` sem capítulo primeiro, depois `descrever_formas`, `listar_estilos`, `ref`, `gerar`, `revisar` e `guia` com o capítulo do assunto. Toda resposta é texto; nenhuma ferramenta devolve imagem.

@@ -2,8 +2,10 @@
   "servers": {
     "pixel-atelier": {
       "type": "stdio",
-      "command": "pixel-atelier",
+      "command": "python",
       "args": [
+        "-m",
+        "pixel_atelier",
         "mcp",
         "--raiz",
         "${workspaceFolder}"

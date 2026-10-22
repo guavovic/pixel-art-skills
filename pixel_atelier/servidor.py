@@ -36,7 +36,7 @@ from .revisao import revisar
 
 INSTRUCOES = ("Pixel art a partir de uma receita JSON curta. Primeiro passo, antes de qualquer outra "
               "ferramenta: guia sem capítulo (o índice); depois só o capítulo do assunto da vez. "
-              "Então descrever_formas e listar_estilos, gerar e revisar (cena com laço: revisar com laco). "
+              "Então descrever_formas e listar_estilos, gerar e revisar (o laço do gerar é conferido sozinho). "
               "Estilo novo: ref numa imagem de referência. "
               "Respostas em texto; abra o PNG só na aprovação final.")
 
@@ -87,7 +87,8 @@ def criar_servidor(raiz: str | Path | None = None) -> MCPServer:
         posicao: Annotated[list[int] | None, Field(description="[x, y] do sprite no fundo (padrão: no meio)",
                                                    min_length=2, max_length=2)] = None,
         estilo: Annotated[str | None, Field(description="preset ou .json para conferir a paleta")] = None,
-        laco: Annotated[bool, Field(description="a cena dá a volta na horizontal: confere a emenda")] = False,
+        laco: Annotated[bool | None, Field(description="força (true) ou pula (false) a conferência da emenda; "
+                                                       "sem ele, vale a marca de laço que o gerar grava no PNG")] = None,
     ) -> str:
         """Confere a imagem pelas regras de pixel art e responde com o relatório: ok ou alerta por regra."""
         arquivo = dentro_da_raiz(raiz, imagem, "imagem")

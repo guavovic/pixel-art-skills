@@ -2,5 +2,5 @@
 # Sem cwd, o Codex sobe o servidor na pasta da sessão (onde abriu, ou a de --cd), que vira a raiz;
 # para outra raiz, acrescente "--raiz", "<pasta>" em args.
 [mcp_servers.pixel-atelier]
-command = "pixel-atelier"
-args = ["mcp"]
+command = "python"
+args = ["-m", "pixel_atelier", "mcp"]

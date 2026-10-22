@@ -180,6 +180,27 @@ def test_laco_quebrado_numa_camada():
     assert alerta.detalhe.endswith("desenhe a camada com laço")
 
 
+def test_laco_pela_marca_que_o_gerar_grava(tmp_path):
+    gerar({**PEQUENA, "ampliar": 2}, pasta=tmp_path / "com")
+    for arquivo in ("vale.png", "vale-2x.png", "vale/01-ceu.png"):  # composto, ampliado e camada levam a marca
+        ok = regra(revisar(tmp_path / "com" / arquivo), "laço")
+        assert ok.estado == "ok" and ok.detalhe.endswith("laço pela marca do gerar"), arquivo
+    assert regra(revisar(tmp_path / "com" / "vale.png", laco=False), "laço").detalhe == (
+        "conferência do laço desligada no pedido")
+    forcado = regra(revisar(tmp_path / "com" / "vale.png", laco=True), "laço")
+    assert forcado.estado == "ok" and "marca" not in forcado.detalhe
+
+    gerar({**PEQUENA, "laco": False}, pasta=tmp_path / "sem")
+    sem = regra(revisar(tmp_path / "sem" / "vale.png"), "laço")
+    assert sem.estado == "pulada" and sem.detalhe.startswith("a cena foi gerada sem laço")
+    assert regra(revisar(tmp_path / "sem" / "vale.png", laco=True), "laço").estado in ("ok", "alerta")
+
+    with Image.open(tmp_path / "com" / "vale.png") as aberta:
+        aberta.copy().save(tmp_path / "salva-de-novo.png")  # outro programa salva sem o texto do PNG
+    solta = regra(revisar(tmp_path / "salva-de-novo.png"), "laço")
+    assert solta.estado == "pulada" and solta.detalhe.startswith("imagem sem a marca de laço")
+
+
 # --- pixel solto ---------------------------------------------------------------------------------
 
 def test_pixel_solto_e_pontilhado():
@@ -308,6 +329,8 @@ def test_linha_de_comando_revisa_e_responde_em_texto(tmp_path, capsys):
     assert saida.startswith("vale.png: 96x64") and "pixel solto:" in saida
     assert main(["revisar", str(tmp_path / "vale.png"), "--laco"]) == 0
     assert "ok laço: emenda" in capsys.readouterr().out
+    assert main(["revisar", str(tmp_path / "vale.png")]) == 0  # sem --laco, vale a marca do gerar
+    assert "laço pela marca do gerar" in capsys.readouterr().out
     assert main(["revisar", str(tmp_path / "nada.png")]) == 2
     assert "revisão não feita" in capsys.readouterr().err
 

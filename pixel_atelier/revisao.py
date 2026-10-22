@@ -4,7 +4,7 @@
 
     print(revisar("saida/vale.png").resumo())               # cena; acha as camadas em saida/vale/
     print(revisar("heroi.png", fundo="saida/vale.png").resumo())  # sprite por cima de uma cena
-    print(revisar("saida/vale.png", laco=True).resumo())    # cena com laço: confere a emenda também
+    print(revisar("saida/vale.png", laco=True).resumo())    # força a conferência da emenda
 
 O relatório é o que o agente lê no lugar da imagem: uma linha por regra, `ok`, `alerta` ou
 `pulada`, com o número que justifica e onde (x, y em pixel real). O PNG só precisa ser aberto
@@ -42,7 +42,8 @@ olhar valor e não matiz é o teste da imagem em escala de cinza.
   sobrepor. Só conta trecho com detalhe: 4 cores ou mais, nenhuma em mais de 60% e pelo menos 6
   linhas e 6 colunas diferentes (tronco e faixa não contam); textura periódica e pontilhado (mais
   de 25% de blocos 2x2 em xadrez) também não.
-- laço (só com `laco=True`, ou `--laco`; a imagem não diz se a cena dá a volta): a diferença de
+- laço (a imagem sozinha não diz se a cena dá a volta: vale a marca que o `gerar` grava no PNG, ou
+  `laco=True`/`--laco` para forçar e `laco=False` para pular): a diferença de
   valor entre a coluna da borda direita e a da esquerda (a emenda), no composto e em cada camada.
   Pixel cheio contra vazio conta 1. Alerta quando a emenda passa de 3 vezes a média das
   diferenças entre colunas vizinhas e também da maior delas: num laço certo a emenda é só mais um
@@ -67,7 +68,7 @@ from PIL import Image
 
 from .cor import distancia2, luminancia, rgb_para_hex
 from .estilo import Estilo, carregar_estilo
-from .imagem import abrir, compor, escala_inteira, reduzir
+from .imagem import abrir, compor, escala_inteira, marca_de_laco, reduzir
 
 CORES_SPRITE = 16
 CORES_CENA = 64  # o SNES põe até 128 cores de fundo na tela (8 subpaletas de 16); 64 deixa folga sem virar foto
@@ -538,9 +539,17 @@ def _diferenca_de_colunas(p: _Px, a: int, b: int) -> float:
     return total / p.altura
 
 
-def _laco(imagens: list[tuple[str, Image.Image]], pedido: bool) -> Checagem:
-    if not pedido:
-        return Checagem("laço", "pulada", "passe laco (--laco) se a cena dá a volta na horizontal")
+def _laco(imagens: list[tuple[str, Image.Image]], pedido: bool | None, marca: bool | None) -> Checagem:
+    """`pedido` vem de quem chama (None: decide a marca); `marca` é a que o `gerar` gravou no PNG."""
+    if pedido is False:
+        return Checagem("laço", "pulada", "conferência do laço desligada no pedido")
+    if pedido is None and marca is None:
+        return Checagem("laço", "pulada", "imagem sem a marca de laço do gerar; passe laco (--laco) se a cena "
+                                          "dá a volta na horizontal")
+    if pedido is None and marca is False:
+        return Checagem("laço", "pulada", "a cena foi gerada sem laço (marca do gerar); passe laco (--laco) para "
+                                          "conferir mesmo assim")
+    origem = "" if pedido else "; laço pela marca do gerar"
     largura = imagens[0][1].width
     if largura < 3:
         return Checagem("laço", "pulada", "imagem estreita demais para medir a emenda")
@@ -554,7 +563,7 @@ def _laco(imagens: list[tuple[str, Image.Image]], pedido: bool) -> Checagem:
     if not quebradas:
         onde = f"composto e {len(imagens) - 1} camadas" if len(imagens) > 1 else "composto"
         return Checagem("laço", "ok", f"emenda x{largura - 1}|x0 dentro do normal no {onde} (composto {emenda:.2f}, "
-                                      f"média entre colunas {media:.2f}; máx {LACO_EMENDA}x a média)")
+                                      f"média entre colunas {media:.2f}; máx {LACO_EMENDA}x a média){origem}")
     nome, emenda, media, maior = max(quebradas, key=lambda m: m[1] / max(m[2], 1e-9))
     outras = f" e mais {len(quebradas) - 1}" if len(quebradas) > 1 else ""
     return Checagem("laço", "alerta", f"emenda x{largura - 1}|x0 quebrada em {nome}{outras}: {emenda:.2f} contra média "
@@ -597,18 +606,20 @@ def revisar(
     fundo: "str | Path | Image.Image | None" = None,
     posicao: tuple[int, int] | None = None,
     estilo: "str | Estilo | None" = None,
-    laco: bool = False,
+    laco: bool | None = None,
 ) -> Revisao:
     """Confere `imagem` pelas regras e devolve a `Revisao` (use `resumo()` para o texto).
 
     `camadas`: pasta ou lista de PNGs do fundo para a frente; sem ela, a pasta `<cena>/` ao lado
     do arquivo é usada se existir. `fundo`: cena por trás de um sprite, que vai em `posicao`
     (x, y do canto de cima; padrão: no meio). `estilo`: confere as cores contra a paleta.
-    `laco`: a cena dá a volta na horizontal; confere a emenda no composto e em cada camada.
+    `laco`: confere a emenda no composto e em cada camada. None (padrão) segue a marca que o
+    `gerar` grava no PNG (sem marca, pula); True força a conferência e False pula.
     Arquivo que não abre ou tamanhos que não batem levantam `ValueError` ou `OSError`.
     """
     nome = Path(imagem).name if isinstance(imagem, (str, Path)) else "imagem"
     original = abrir(imagem)
+    marca = marca_de_laco(imagem) if laco is None and isinstance(imagem, (str, Path)) else None
     if isinstance(estilo, str):
         estilo = carregar_estilo(estilo)
 
@@ -671,7 +682,7 @@ def revisar(
         _serrilhado(silhuetas),
         _escala(cena),
         _repeticao(alvo),
-        _laco([("composto", alvo)] + lidas, laco),
+        _laco([("composto", alvo)] + lidas, laco, marca),
     ]
     return Revisao(nome=nome, largura=alvo.width, altura=alvo.height, tipo=tipo, escala=escala,
                    camadas=[n for n, _ in lidas], checagens=checagens, imagem=alvo)

@@ -2,8 +2,10 @@
   "mcpServers": {
     "pixel-atelier": {
       "type": "local",
-      "command": "pixel-atelier",
+      "command": "python",
       "args": [
+        "-m",
+        "pixel_atelier",
         "mcp"
       ],
       "tools": [
