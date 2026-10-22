@@ -80,6 +80,7 @@ from PIL import Image, ImageChops
 from .cor import QUASE_IGUAL, distancia2, luminancia, rgb_para_hex
 from .estilo import Estilo, carregar_estilo
 from .imagem import abrir, compor, escala_indicada, escala_inteira, marca_de_laco, reduzir, vizinho
+from .silhuetas import separar
 
 CORES_SPRITE = 16
 CORES_CENA = 64  # o SNES põe até 128 cores de fundo na tela (8 subpaletas de 16); 64 deixa folga sem virar foto
@@ -316,6 +317,32 @@ def _atmosfera(silhueta: _Px, prof: dict[tuple[int, int], int]) -> bool:
     return cheios == 0 or borda > ATMOSFERA * cheios
 
 
+@dataclass
+class _DoComposto:
+    """Silhuetas separadas só pelo composto (`silhuetas.separar`), quando não há camadas nem fundo."""
+
+    silhuetas: int
+    borda: list[tuple[int, int, float]]  # a borda de todas contra o que encosta nelas
+    frente: list[tuple[int, int, float]]  # a borda das que chegam no pé da imagem: o mais perto, na vista lateral
+
+
+def _do_composto(cena: _Px) -> _DoComposto:
+    resultado = _DoComposto(0, [], [])
+    for s in separar(cena.imagem):
+        f = _Px(s.imagem)
+        prof = _profundidade(f)
+        if _atmosfera(f, prof):
+            continue
+        borda = _borda(f, cena)
+        if not borda:
+            continue
+        resultado.silhuetas += 1
+        resultado.borda.extend(borda)
+        if s.caixa[3] == cena.altura:
+            resultado.frente.extend(borda)
+    return resultado
+
+
 # --- regras --------------------------------------------------------------------------------------
 
 def _cores(alvo: Image.Image, limite: int, estilo: Estilo | None) -> Checagem:
@@ -355,6 +382,37 @@ def _contraste(pares: list[tuple[str, list[tuple[int, int, float]]]]) -> Checage
     if alerta:
         partes.append(DICA_CONTRASTE)
     return Checagem("contraste", "alerta" if alerta else "ok", "; ".join(partes))
+
+
+def _contraste_do_composto(composto: _DoComposto) -> Checagem:
+    if not composto.borda:
+        return Checagem("contraste", "pulada", "sem camadas nem fundo, e o composto não separou silhuetas "
+                                               "(passe camadas ou fundo)")
+    mediana = _mediana([d for _, _, d in composto.borda])
+    partes = [f"pelo composto, sem camadas: {composto.silhuetas} silhuetas, mediana "
+              f"{_medida(mediana, CONTRASTE_CAMADAS)} na borda entre elas (mín {CONTRASTE_CAMADAS:.2f})"]
+    if mediana < CONTRASTE_CAMADAS:
+        partes.append(DICA_CONTRASTE)
+    return Checagem("contraste", "alerta" if mediana < CONTRASTE_CAMADAS else "ok", "; ".join(partes), True)
+
+
+def _legibilidade_do_composto(composto: _DoComposto) -> Checagem:
+    if not composto.borda:
+        return Checagem("legibilidade", "pulada", "sem camadas nem fundo, e o composto não separou silhuetas "
+                                                  "(passe camadas ou fundo)")
+    if not composto.frente:
+        return Checagem("legibilidade", "pulada", "sem camadas nem fundo, e nenhuma silhueta do composto chega no pé "
+                                                  "da imagem (passe camadas ou fundo)")
+    somem = [(x, y) for x, y, d in composto.frente if d < SOME]
+    fracao = len(somem) / len(composto.frente)
+    partes = [f"pelo composto: a borda das silhuetas da frente (as que chegam no pé da imagem) some em {_medida(fracao, SOME_MAX, '.0%')} "
+              f"(máx {SOME_MAX:.0%})"]
+    if fracao > SOME_MAX:
+        partes[0] += f", {_regiao(somem)}"
+        partes.append(DICA_CONTRASTE)
+    else:
+        partes.append("fundo apagado só se mede com as camadas")
+    return Checagem("legibilidade", "alerta" if fracao > SOME_MAX else "ok", "; ".join(partes), True)
 
 
 def _legibilidade(borda_frente: list[tuple[int, int, float]] | None, fundo: _Px | None,
@@ -415,6 +473,8 @@ def _pillow(silhuetas: list[tuple[str, _Px, dict[tuple[int, int], int]]]) -> Che
     achadas, conferidas = [], 0
     for nome, s, prof in silhuetas:
         borda = [p for p, v in prof.items() if v == 1]
+        if not borda:
+            continue  # sem pixel vazio em volta (alfa parcial, imagem cheia): não há silhueta para medir
         cores = Counter(s.px[x, y] for x, y in borda)
         cor, quantas = cores.most_common(1)[0]
         resto = [s.valor(*p) for p, v in prof.items() if v > 1]
@@ -894,14 +954,27 @@ def revisar(
     if tipo == "sprite":
         silhuetas.append(("sprite", alvo_px, _profundidade(alvo_px)))
 
+    if tipo == "cena" and not lidas:  # só o composto: as silhuetas saem dele
+        composto = _do_composto(alvo_px)
+        contraste, legibilidade = _contraste_do_composto(composto), _legibilidade_do_composto(composto)
+        # forma e sombreado não: no composto a silhueta se corta na que está na frente e na troca de material,
+        # e a luz de contorno cai noutra família; medido assim, dá alerta em cena boa
+        motivo = "sem camadas: no composto a silhueta se corta nas outras (passe camadas ou fundo)"
+        pillow = Checagem("pillow shading", "pulada", motivo, True)
+        serrilhado = Checagem("serrilhado", "pulada", motivo, True)
+    else:
+        contraste = _contraste(pares)
+        legibilidade = _legibilidade(pares[-1][1] if pares else None, fundo_px,
+                                     alvo_px if tipo == "sprite" else None, "sprite" if fundo is not None else "frente")
+        pillow, serrilhado = _pillow(silhuetas), _serrilhado(silhuetas)
+
     checagens = [
         _cores(alvo, CORES_SPRITE if sprite else CORES_CENA, estilo),
-        _contraste(pares),
-        _legibilidade(pares[-1][1] if pares else None, fundo_px, alvo_px if tipo == "sprite" else None,
-                      "sprite" if fundo is not None else "frente"),
+        contraste,
+        legibilidade,
         _soltos(alvo_px),
-        _pillow(silhuetas),
-        _serrilhado(silhuetas),
+        pillow,
+        serrilhado,
         _escala(cena),
         _repeticao(alvo),
         _laco([("composto", alvo)] + lidas, laco, marca),

@@ -142,11 +142,44 @@ def test_sprite_sozinho_precisa_de_faixa_de_valor():
     assert c.detalhe.endswith("aumente o contraste de valor do sprite (luz, sombra e contorno mais separados)")
 
 
+def isoluminante(frente) -> Image.Image:
+    """Cena opaca sem camadas: céu vermelho e um morro que chega no pé, com o mesmo valor do céu ou não."""
+    cena = chapa(48, 48, (200, 60, 60, 255))  # valor 0,35
+    cena.paste(frente, (12, 20, 36, 48))
+    cena.paste(frente, (16, 16, 32, 20))
+    return cena
+
+
+def test_cena_sem_camadas_mede_contraste_pelo_composto():
+    verde_igual = (40, 108, 60, 255)  # outro matiz, quase o mesmo valor do vermelho: some no cinza
+    revisao = revisar(isoluminante(verde_igual))
+    assert not revisao.camadas
+    c = regra(revisao, "contraste")
+    assert c.estado == "alerta" and c.heuristica and c.detalhe.startswith("pelo composto, sem camadas: 2 silhuetas")
+    c = regra(revisao, "legibilidade")
+    assert c.estado == "alerta" and "silhuetas da frente" in c.detalhe and "some em 100%" in c.detalhe
+    assert c.detalhe.endswith(DICA_CONTRASTE)
+
+    revisao = revisar(isoluminante((20, 70, 30, 255)))  # verde escuro: o valor separa
+    assert regra(revisao, "contraste").estado == "ok" and regra(revisao, "legibilidade").estado == "ok"
+
+
+def test_pillow_com_alfa_parcial_sem_pixel_vazio():
+    """#35: sprite todo meio transparente não tem borda; a regra pula em vez de quebrar."""
+    c = regra(revisar(chapa(12, 12, (90, 90, 90, 128))), "pillow shading")
+    assert c.estado == "pulada"
+
+
 def test_cena_sem_camadas_pula_o_que_precisa_delas():
-    revisao = revisar(faixas(32, 32, [50, 150]))
-    assert {c.regra for c in revisao.checagens if c.estado == "pulada"} == {
-        "contraste", "legibilidade", "pillow shading", "serrilhado", "escala", "laço", "matiz da rampa",
-        "contorno preto", "anti-alias", "linha 2:1"}  # escala: chapado demais
+    lisa = revisar(chapa(32, 32, cinza(90)))  # uma cor só: nada para separar
+    assert {c.regra for c in lisa.checagens if c.estado == "pulada"} >= {
+        "contraste", "legibilidade", "pillow shading", "serrilhado", "escala", "laço"}
+    revisao = revisar(faixas(32, 32, [50, 150]))  # duas faixas: o composto separa, mas nada é fechado
+    assert regra(revisao, "contraste").estado == "ok"
+    for nome in ("pillow shading", "serrilhado"):  # a forma só se mede com as camadas
+        c = regra(revisao, nome)
+        assert c.estado == "pulada" and "se corta nas outras" in c.detalhe
+    assert regra(revisao, "escala").estado == "pulada"  # chapado demais
 
 
 # --- laço ----------------------------------------------------------------------------------------
