@@ -28,7 +28,7 @@ Ateliê de pixel art para agentes de IA. O agente escreve uma receita JSON curta
 ## Destaques
 
 - **Cena inteira numa receita:** céu, nuvens, montanhas, árvores, rochas, cristais, névoa e raios em camadas, do fundo para a frente. Toda camada dá a volta na horizontal sem emenda, pronta para parallax.
-- **Revisão em texto:** o `revisar` confere cores, contraste, legibilidade, pixel solto, pillow shading, serrilhado, escala, repetição e a emenda do laço, com o número e o lugar de cada problema. O agente só abre a imagem na aprovação final.
+- **Revisão em texto:** o `revisar` confere cores, contraste, legibilidade, pixel solto, pillow shading, serrilhado, escala, repetição, a emenda do laço, o matiz das rampas, contorno preto, anti-alias e linha 2:1, com o número e o lugar de cada problema. O agente só abre a imagem na aprovação final.
 - **Estilo a partir de uma referência:** o `ref` lê a imagem uma vez e grava paleta e rampas como preset com nome; depois a receita usa só o nome.
 - **Guia de pixel art por capítulo:** o agente lê só o assunto da vez, e cada regra do `revisar` aponta para o capítulo que a explica.
 - **Qualquer agente:** servidor MCP local e embalagens prontas para Claude Code, Codex, Gemini CLI, Cursor e GitHub Copilot.

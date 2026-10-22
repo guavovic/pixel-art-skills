@@ -6,6 +6,8 @@ Valor (claro e escuro) carrega a leitura; matiz e saturação dão o clima. Esco
 - Rampa: a sequência de tons de um material, do escuro ao claro. 3 a 5 passos bastam para quase tudo; 2 em sprite pequeno.
 - Mudança de matiz (hue shift): a sombra puxa para o frio (azul, roxo), a luz para o quente (amarelo). Rampa que só muda o brilho fica "plástica" e briga com as outras.
 - Faixa útil: 15° a 30° de matiz entre a ponta escura e a clara.
+- `revisar --estilo` (linha `matiz da rampa`): alerta quando uma rampa do estilo usada na imagem muda menos de **3** graus (`RAMPA_MATIZ`) do tom escuro ao claro. Abaixo de 3° é só o arredondamento do RGB: a rampa muda só o brilho. De 3° a 15° é escolha de clima (noite fria quase num matiz só).
+- Só contam cores com saturação de pelo menos **0,20** (`RAMPA_SATURACAO`; abaixo disso é quase cinza), e a rampa toda abaixo de valor **0,25** (`RAMPA_ESCURA`) fica de fora: no escuro o matiz quase não aparece.
 - Saturação: mais alta nos tons médios e escuros, cai no tom mais claro. Luz quase branca e saturada demais "queima".
 - Passo de valor entre vizinhos da rampa: pelo menos **0,05** (cerca de 13 em 255), senão os dois tons viram um só. É o mesmo número que o `revisar` usa para dizer que uma borda some (`SOME`).
 - Compartilhe tons entre rampas (o escuro da folha serve de sombra da pedra). Paleta fica menor e mais coesa.

@@ -6,9 +6,9 @@ Ler um capítulo: `python -m pixel_atelier guia <capitulo>`, a ferramenta MCP `g
 
 | Capítulo | Quando ler | Regras do `revisar` |
 | --- | --- | --- |
-| `fundamentos` | pixel solto, serrilhado, contorno, anti-alias | pixel solto, serrilhado |
-| `cor` | montar paleta ou rampa, cor que não "casa" | cores |
-| `angulo` | escolher a vista: lateral, top-down, 3/4, isométrico | - |
+| `fundamentos` | pixel solto, serrilhado, contorno, anti-alias | pixel solto, serrilhado, contorno preto, anti-alias |
+| `cor` | montar paleta ou rampa, cor que não "casa" | cores, matiz da rampa (com `--estilo`) |
+| `angulo` | escolher a vista: lateral, top-down, 3/4, isométrico | linha 2:1 |
 | `escala` | tamanho do sprite, pixels por unidade, ampliar | escala |
 | `luz` | volume, direção da luz, sombra, luz de contorno | pillow shading |
 | `pontilhado` | degradê, névoa, transição de tom | pixel solto (exceção) |

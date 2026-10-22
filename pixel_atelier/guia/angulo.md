@@ -11,6 +11,7 @@ Escolha uma vista por jogo e mantenha em tudo: personagem, cenário e itens. Mis
 
 ## Regras com número
 - Isométrico 2:1: a linha é 2,2,2...; nunca 2,1,2 (vira serrilhado). Ladrilho de chão com largura = 2 x altura (32x16, 64x32).
+- `revisar` (linha `linha 2:1`, heurística): escada de **6** degraus ou mais (`ISO_DEGRAUS`, sem as pontas, que podem estar cortadas) com pelo menos **0,85** deles de 2 pixels (`ISO_DOIS`) é linha 2:1; um degrau de 1 ou 3 entre dois de 2 é alerta. Terreno ondulado (2,2,3,2,3) fica abaixo de 0,85 e não conta.
 - Nas quinas do losango isométrico, junte os dois pixels de topo (ponta com 2 de largura) para a linha casar no ladrilho vizinho.
 - 3/4: personagem com cabeça grande lê melhor (cabeça de 1/3 a 1/2 da altura em sprite de 16 a 32 px).
 - Top-down: sombra projetada simples (elipse de 1 tom) embaixo do personagem ancora ele no chão.
@@ -23,6 +24,6 @@ Escolha uma vista por jogo e mantenha em tudo: personagem, cenário e itens. Mis
 
 ## No motor
 - As formas de hoje (`ceu`, `terreno`, `arvore`, `rocha`, `cristal`, `nevoa`, `raios`, `nuvem`) são de vista lateral, em camadas com laço horizontal.
-- Top-down, 3/4 e isométrico ainda não têm forma: desenhe por fora e use o `revisar` (serrilhado pega linha 2:1 quebrada).
+- Top-down, 3/4 e isométrico ainda não têm forma: desenhe por fora e use o `revisar` (a linha `linha 2:1` pega o 2,1,2; vistas misturadas ele não confere: olhe na aprovação final).
 
 Fontes: Raymond Schlitter, "Pixelblog 4: Graphical Projection Part 2" e "Pixelblog 41: Isometric Pixel Art" (slynyrd.com/pixelblog-catalogue); tutoriais de Pedro Medeiros, "Isometric" (saint11.art/blog/pixel-art-tutorials).
