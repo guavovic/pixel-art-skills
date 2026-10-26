@@ -181,26 +181,27 @@ python -m pixel_atelier ref referencia.png --nome dia-claro [--base snes-diurno]
 ```
 preset dia-claro gravado em ~/.pixel-atelier/estilos/dia-claro.json, base snes-diurno
 referência snes-diurno-3x.png: 960x540, ampliada 3x (pixel real 320x180)
-paleta: 31 cores (de 57 na imagem)
-valor: 0.11 a 0.92, faixa 0.55 (p5 a p95)
+paleta: 32 cores (de 56 na imagem)
+valor: 0.11 a 1.00, faixa 0.54 (p5 a p95)
 rampas, do escuro ao claro (céu: do topo ao horizonte):
-  folha: 6 cores #245a31 > #72b182, valor 0.30 a 0.63, passo 0.07
-  grama: 6 cores #639380 > #bae884, valor 0.53 a 0.84, passo 0.06
-  terra, tronco: 2 cores #82552d > #926a3c, valor 0.36 a 0.44, passo 0.08
-  pedra: 5 cores #675a5e > #acb2b3, valor 0.36 a 0.69, passo 0.08
-  nuvem, nevoa, neve: 4 cores #c5dbf0 > #dfebf8, valor 0.85 a 0.92, passo 0.02
-  ceu: 5 cores #3868c8 > #78a8f0, valor 0.40 a 0.64, passo 0.06
-fora do matiz da família, só na paleta: #c17e95
-da base, só com cores da paleta: cristal
-luz #dfebf8, contorno #20183a, atmosfera #78a8f0
-aviso: 57 cores na referência; paleta reduzida para 31 (cores sobe o limite)
+  folha: 6 cores #245a31 > #589c5f, valor 0.30 a 0.54, passo 0.05
+  grama: 6 cores #38922e > #bae690, valor 0.47 a 0.84, passo 0.07
+  terra: 3 cores #5f311c > #785b4f, valor 0.22 a 0.38, passo 0.08
+  tronco: 4 cores #5f311c > #926a3c, valor 0.22 a 0.44, passo 0.07
+  pedra: 3 cores #5a5a6a > #898a9f, valor 0.36 a 0.55, passo 0.09
+  cristal: 3 cores #8a39ad > #dfa2eb, valor 0.32 a 0.71, passo 0.19
+  nuvem, nevoa, neve: 5 cores #c2c5ac > #ffffff, valor 0.76 a 1.00, passo 0.06
+  ceu: 4 cores #3868c8 > #78a8f0, valor 0.40 a 0.64, passo 0.08
+luz #ffffff, contorno #20183a, atmosfera #78a8f0
+aviso: 56 cores na referência; paleta reduzida para 32 (cores sobe o limite)
 ```
 
 - **Pixel**: imagem ampliada (blocos NxN) é lida no tamanho real.
-- **Paleta**: as cores da imagem, exatas até `--cores` (padrão 32); acima disso, quantizada pelo corte de mediana do Pillow, com aviso. Foto ou imagem com anti-aliasing (mais de 256 cores) é reduzida pela média até 256 por lado antes, com aviso para conferir as rampas.
+- **Paleta**: as cores da imagem, exatas até `--cores` (padrão 32); acima disso, com aviso, a mais escura e a mais clara ficam exatas (contorno e luz) e o resto é quantizado família a família pelo corte de mediana do Pillow, com pelo menos 3 cores por família, para a terra ou o cristal não virarem 2 tons. Foto ou imagem com anti-aliasing (mais de 256 cores) é reduzida pela média até 256 por lado antes, com aviso para conferir as rampas.
 - **Rampas**: cada cor cai numa família pelo matiz, do escuro ao claro: verde vai para `folha` e `grama`, quente (vermelho, laranja, marrom) para `terra` e `tronco`, cinza para `pedra`, cinza claro para `nuvem`, `nevoa` e `neve`, roxo para `cristal`. Família com 5 cores ou mais dá rampas diferentes para o par: `folha` e `tronco` no trecho mais escuro, `grama` e `terra` no mais claro. O céu é a cor mais comum de cada linha do terço de cima, do topo ao horizonte; a do horizonte vira a atmosfera. Luz é a cor mais clara, contorno a mais escura.
 - **Tom fora do matiz**: o tom que destoa do matiz da família (como o rosa que a quantização põe entre os marrons) sai da rampa e fica só na paleta, listado em `fora do matiz da família`. Rampa que muda de matiz aos poucos, do verde escuro ao verde-amarelo, fica inteira.
 - **Família dominante**: referência quase toda de um matiz só (60% da paleta ou mais, como uma cena noturna toda azul ou o game-boy todo verde) reparte essa família pelos papéis que ficariam vazios, cada um num trecho de valor (`tronco` no escuro, `pedra` no meio, `neve` no claro). O resumo diz `família azul domina (...)` e quais papéis vieram dela.
+- **Chão**: a cor mais comum da faixa de baixo da imagem. Se ela cai na família da terra, a rampa da terra é centrada nela, e o chão gerado sai na mesma cor da referência (a pintura usa o tom do meio da rampa).
 - **Contraste**: faixa de valor (p5 a p95, como no `revisar`) e o passo de valor de cada rampa, no texto e no bloco `referencia` do preset.
 - **Base**: o que a imagem não diz (sombreamento, contorno, direção da luz, papel sem família quando nenhuma domina) vem de `--base`, um preset (mesmo nome e mesma mensagem de erro do `gerar` e do `revisar`) ou um `.json`. A paleta do preset é fechada nas cores da referência, então até o que vem da base é pintado só com elas.
 

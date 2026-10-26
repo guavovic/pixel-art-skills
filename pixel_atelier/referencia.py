@@ -9,8 +9,11 @@ agente lê o resumo em texto no lugar da imagem. Tudo é determinístico e só u
 
 O que sai da imagem:
 - tamanho do pixel: imagem ampliada (blocos NxN) volta para o tamanho real (`imagem.escala_inteira`).
-- paleta: as cores visíveis, exatas quando são até `cores` (padrão 32). Acima disso a imagem é
-  quantizada pelo corte de mediana do Pillow, com aviso. Com mais de 256 cores ela não parece
+- paleta: as cores visíveis, exatas quando são até `cores` (padrão 32). Acima disso, com aviso,
+  a mais escura e a mais clara ficam exatas (contorno e luz) e o resto é quantizado família a
+  família pelo corte de mediana do Pillow: cada família guarda `PISO_DA_FAMILIA` cores (se
+  couber) e a sobra vai pelo tamanho, para a família pequena não virar 2 tons. Com mais famílias
+  que cores, a imagem toda é quantizada de uma vez. Com mais de 256 cores ela não parece
   pixel art (foto, anti-aliasing): se passar de `LADO_MAX` por lado, antes é reduzida pela média
   de blocos.
 - rampas: cada cor cai numa família pelo matiz (HSV) ou fica neutra (saturação abaixo de 0,2 ou
@@ -26,6 +29,9 @@ O que sai da imagem:
 - família dominante: com `DOMINANTE` da paleta ou mais numa família só (cena noturna toda azul,
   game-boy todo verde), os papéis sem família vão para ela, cada um num trecho de valor (`JANELAS`:
   tronco no escuro, neve no claro), e o tom fora do matiz sai papel a papel.
+- chão: em imagem opaca, a cor mais comum da faixa de baixo (`FAIXA_DO_CHAO` da altura). Se ela
+  está na família da terra, a rampa da terra é centrada nela, porque a pintura usa o tom do meio:
+  assim o chão gerado sai na cor do chão da referência.
 - céu: em imagem opaca, a cor mais comum de cada linha do terço de cima, de cima para baixo (do
   topo ao horizonte, até `RAMPA_MAX` cores). A última, a do horizonte, vira a atmosfera. Sprite
   (com transparência) não tem céu.
@@ -60,6 +66,7 @@ SATURACAO_NEUTRA = 0.2
 VALOR_ESCURO = 0.1  # cor quase preta: o matiz dela não quer dizer nada
 NEUTRA_CLARA = 0.7  # valor (luminância) a partir do qual a neutra é nuvem, névoa ou neve
 RAMPA_MAX = 6
+PISO_DA_FAMILIA = 3  # cores que cada família guarda quando a paleta é reduzida (se couber): rampa de 3 tons
 
 # família: (início, fim) do matiz em graus; o resto (330 a 50, dando a volta no 0) é "quente"
 FAMILIAS = {"verde": (50, 170), "azul": (170, 260), "roxo": (260, 330)}
@@ -82,6 +89,7 @@ JANELA_DO_PAR = {"folha": (0, 0.65), "tronco": (0, 0.65), "grama": (0.35, 1), "t
 DOMINANTE = 0.6
 JANELAS = {"tronco": (0, 0.45), "terra": (0.1, 0.55), "folha": (0.15, 0.65), "pedra": (0.25, 0.7),
            "grama": (0.35, 0.85), "cristal": (0.5, 1), "nuvem": (0.55, 1), "nevoa": (0.65, 1), "neve": (0.75, 1)}
+FAIXA_DO_CHAO = 0.1  # fração de baixo da imagem cuja cor mais comum é o chão
 ORDEM = ("folha", "grama", "terra", "tronco", "pedra", "cristal", "nuvem", "nevoa", "neve")
 
 
@@ -164,20 +172,57 @@ def _contar(imagem: Image.Image) -> list[tuple[int, RGB]]:
 
 
 def _quantizar(imagem: Image.Image, cores: int) -> list[tuple[int, RGB]]:
-    """Corte de mediana do Pillow, só com os pixels visíveis. Devolve (quantos pixels, cor)."""
-    if imagem.getchannel("A").getextrema()[0] == 255:
-        rgb = imagem.convert("RGB")
-    else:
-        visiveis = [p[:3] for p in imagem.getdata() if p[3] > 0]
-        rgb = Image.new("RGB", (len(visiveis), 1))
-        rgb.putdata(visiveis)
+    """Corte de mediana do Pillow, só com os pixels visíveis, família a família. Devolve (quantos pixels, cor).
+
+    O corte da imagem inteira junta o marrom escuro de pouco pixel com o cinza vizinho e a família fica com
+    2 cores (rampa curta). Por isso cada família (`_familia`) é quantizada sozinha, com uma parte das `cores`
+    (`_repartir`). A cor mais escura e a mais clara ficam exatas: são o contorno e a luz do preset. Com mais
+    famílias do que cores, vale o corte da imagem inteira."""
+    contagem = _contar(imagem)
+    escura = min(contagem, key=lambda par: luminancia(par[1]))
+    clara = max(contagem, key=lambda par: luminancia(par[1]))
+    por_familia: dict[str, list[tuple[int, RGB]]] = {}
+    for par in contagem:
+        if par is not escura and par is not clara:
+            por_familia.setdefault(_familia(par[1]), []).append(par)
+    sobra = cores - 2
+    if len(por_familia) > sobra:
+        return _mediana_de_cores(contagem, cores)
+    cotas = _repartir({f: len(pares) for f, pares in por_familia.items()}, sobra)
+    juntas = [escura, clara] + [par for f, pares in por_familia.items() for par in _mediana_de_cores(pares, cotas[f])]
+    pixels: dict[RGB, int] = {}
+    for n, cor in juntas:
+        pixels[cor] = pixels.get(cor, 0) + n
+    return [(n, c) for c, n in pixels.items()]
+
+
+def _repartir(tamanhos: dict[str, int], total: int) -> dict[str, int]:
+    """Divide `total` entre as famílias: cada uma com até `PISO_DA_FAMILIA` cores (se couber, senão 1) e o
+    resto pelo tamanho (D'Hondt), nunca mais que o tamanho dela."""
+    pisos = {f: min(n, PISO_DA_FAMILIA) for f, n in tamanhos.items()}
+    cotas = pisos if sum(pisos.values()) <= total else {f: 1 for f in tamanhos}
+    livres = [f for f in tamanhos if cotas[f] < tamanhos[f]]
+    while livres and sum(cotas.values()) < total:
+        f = max(livres, key=lambda f: tamanhos[f] / (cotas[f] + 1))
+        cotas[f] += 1
+        livres = [f for f in livres if cotas[f] < tamanhos[f]]
+    return cotas
+
+
+def _mediana_de_cores(contagem: Sequence[tuple[int, RGB]], cores: int) -> list[tuple[int, RGB]]:
+    """Corte de mediana do Pillow nas cores dadas, cada uma com o peso dos pixels dela."""
+    if len(contagem) <= cores:
+        return list(contagem)
+    pixels = [cor for n, cor in contagem for _ in range(n)]
+    rgb = Image.new("RGB", (len(pixels), 1))
+    rgb.putdata(pixels)
     q = rgb.quantize(colors=cores, method=Image.Quantize.MEDIANCUT, dither=Image.Dither.NONE)
     paleta = q.getpalette()
-    contagem: dict[RGB, int] = {}
+    juntas: dict[RGB, int] = {}
     for n, i in q.getcolors(maxcolors=256) or []:
         cor = tuple(paleta[i * 3:i * 3 + 3])
-        contagem[cor] = contagem.get(cor, 0) + n  # type: ignore[index]
-    return [(n, c) for c, n in contagem.items()]
+        juntas[cor] = juntas.get(cor, 0) + n  # type: ignore[index]
+    return [(n, c) for c, n in juntas.items()]
 
 
 def _familia(cor: RGB) -> str:
@@ -198,6 +243,24 @@ def _ceu(imagem: Image.Image, paleta: Sequence[RGB]) -> list[RGB]:
         _, cor = max(linha.getcolors(maxcolors=imagem.width))
         cores.append(cor_mais_proxima(cor[:3], paleta))
     return sem_repetir(cores)
+
+
+def _chao(imagem: Image.Image, paleta: Sequence[RGB]) -> RGB | None:
+    """Cor mais comum da faixa de baixo (`FAIXA_DO_CHAO` da altura), já na paleta. Só em imagem opaca: na
+    vista lateral é o chão."""
+    if imagem.getchannel("A").getextrema()[0] < 255:
+        return None
+    faixa = imagem.crop((0, imagem.height - max(1, round(imagem.height * FAIXA_DO_CHAO)), imagem.width, imagem.height))
+    _, cor = max(faixa.getcolors(maxcolors=faixa.width * faixa.height))
+    return cor_mais_proxima(cor[:3], paleta)
+
+
+def _centrar(cores: Sequence[RGB], cor: RGB, largura: float) -> tuple[float, float]:
+    """Trecho de até `largura` com `cor` bem no meio (o tom base da rampa), sem pular cor: encolhe perto da
+    ponta e fica com até `RAMPA_MAX` cores."""
+    i, ultimo = cores.index(cor), len(cores) - 1
+    lado = min(round(largura / 2 * ultimo), i, ultimo - i, (RAMPA_MAX - 1) // 2)
+    return (i - lado) / ultimo, (i + lado) / ultimo
 
 
 def _espacar(cores: Sequence[RGB], quantas: int) -> tuple[RGB, ...]:
@@ -267,20 +330,23 @@ def _janela(cores: Sequence[RGB], inicio: float, fim: float,
     return _espacar(trecho, RAMPA_MAX), fora
 
 
-def _rampas_por_papel(familias: dict[str, list[RGB]], dominante: str | None,
-                      pixels: dict[RGB, int]) -> tuple[dict[str, tuple[RGB, ...]], list[RGB]]:
+def _rampas_por_papel(familias: dict[str, list[RGB]], dominante: str | None, pixels: dict[RGB, int],
+                      chao: RGB | None = None) -> tuple[dict[str, tuple[RGB, ...]], list[RGB]]:
     """(rampa de cada papel, tons tirados por estarem fora do matiz).
 
     Cada família com 2 cores ou mais vai para os papéis dela. O par (folha e grama, tronco e terra) de
     família com `DIVIDIR_PAR` cores ou mais ganha duas rampas: folha e tronco no trecho mais escuro. A
     família dominante, quando há, vai também para os papéis que ficaram vazios, cada um no seu trecho de
     valor (`JANELAS`), e o tom fora do matiz sai papel a papel (o verde-água sai da pedra azul, mas fica
-    no cristal)."""
+    no cristal). Se a cor do `chao` é da família que dá a terra, a rampa da terra fica centrada nela: o
+    chão quase preto da cena noturna, e não o trecho do meio da família."""
     por_papel: dict[str, tuple[RGB, ...]] = {}
     tirados: list[RGB] = []
 
     def rampa(familia: str, papel: str, inicio: float, fim: float) -> None:
         filtro = pixels if familia == dominante and familia not in CINZAS else None
+        if papel == "terra" and chao in familias[familia]:
+            inicio, fim = _centrar(familias[familia], chao, fim - inicio)
         por_papel[papel], fora = _janela(familias[familia], inicio, fim, filtro)
         tirados.extend(fora)
 
@@ -374,7 +440,7 @@ def extrair_estilo(imagem: "str | Path | Image.Image", nome: str | None = None, 
         if nome_da_familia not in CINZAS and nome_da_familia != dominante:  # a dominante se filtra em cada papel
             familias[nome_da_familia], longe = _separar_fora_do_matiz(cores_da_familia, pixels)
             fora_do_matiz.extend(longe)
-    por_papel, tirados = _rampas_por_papel(familias, dominante, pixels)
+    por_papel, tirados = _rampas_por_papel(familias, dominante, pixels, _chao(alvo, paleta))
     usadas = {c for r in por_papel.values() for c in r}
     fora_do_matiz.extend(sem_repetir(c for c in tirados if c not in usadas))
     proprios = {p for f, papeis in PAPEIS_DA_FAMILIA.items() if len(familias.get(f, ())) >= 2 for p in papeis}
