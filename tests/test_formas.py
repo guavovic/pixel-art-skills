@@ -117,6 +117,16 @@ def test_laco_pede_largura_multipla_de_8():
         desenhar("arvore", "game-boy", 100, 60, seed=3)
 
 
+@pytest.mark.parametrize("forma, extra", [
+    ("arvore", dict(tipo="copa", base=1.02)),
+    ("arvore", dict(tipo="mista", base=1.3)),
+    ("nuvem", dict(faixa=(0.9, 1.4))),
+])
+def test_base_abaixo_da_tela_nao_quebra(forma, extra):
+    imagem = gerar(forma, **extra)
+    assert imagem.size == (LARGURA, ALTURA)
+
+
 def test_forma_desconhecida():
     with pytest.raises(KeyError):
         desenhar("castelo", "game-boy", 64, 64)

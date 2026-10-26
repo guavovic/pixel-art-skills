@@ -69,8 +69,11 @@ class Tela:
             d.ellipse([cx + dx - rx, cy - ry, cx + dx + rx, cy + ry], fill=valor)
 
     def retangulo(self, mascara: Image.Image, x0: float, y0: float, x1: float, y1: float, valor: int = 255) -> None:
-        d = ImageDraw.Draw(mascara)
         x0, y0, x1, y1 = _q(x0), _q(y0), _q(x1), _q(y1)
+        vazio = x1 < x0 or y1 < y0
+        if vazio:
+            return
+        d = ImageDraw.Draw(mascara)
         for dx in self._deslocamentos():
             d.rectangle([x0 + dx, y0, x1 + dx, y1], fill=valor)
 
