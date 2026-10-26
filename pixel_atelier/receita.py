@@ -12,6 +12,7 @@ Formato (só `camadas` é obrigatório; o resto tem padrão):
       "seed": 0,                       # sorteia as camadas que não fixam a própria seed
       "ampliar": 1,                    # grava também o composto ampliado N vezes, para olhar
       "saida": "tudo",                 # "tudo", "composto" ou "camadas"
+      "animacao": {"quadros": 48, "duracao": 100, "voltas": 2},  # opcional: GIF, folha e JSON de tempo
       "camadas": [                     # do fundo para a frente
         {"forma": "ceu", "astro": "sol"},
         {"forma": "arvore", "nome": "mata-longe", "seed": 4, "profundidade": 0.6, "tipo": "pinheiro"}
@@ -43,13 +44,17 @@ from .formas.ceu import ASTROS
 from .formas.nuvem import TIPOS as TIPOS_NUVEM
 from .formas.terreno import SUPERFICIES
 
-CAMPOS = ("cena", "descricao", "tamanho", "estilo", "laco", "seed", "ampliar", "saida", "camadas")
+CAMPOS = ("cena", "descricao", "tamanho", "estilo", "laco", "seed", "ampliar", "saida", "animacao", "camadas")
 SAIDAS = ("tudo", "composto", "camadas")
 COMUNS = ("seed", "laco", "deslocamento")  # parâmetros que toda forma aceita e a receita resolve
 TAMANHO_MAXIMO = 4096
 SEED_DERIVADA = 100_000  # seeds derivadas ficam curtas, fáceis de copiar para fixar uma camada
 AMPLIAR_MAXIMO = 16
 AMPLIADO_MAXIMO = 4096  # lado máximo do composto depois de `ampliar`, para não estourar a memória
+ANIMACAO_PADRAO = {"quadros": 48, "duracao": 100, "voltas": 2}
+QUADROS_MAXIMO = 256
+DURACAO_MAXIMA = 2000  # ms por quadro; o GIF guarda o tempo em centésimos, então a duração anda de 10 em 10
+VOLTAS_MAXIMO = 16
 NOME_VALIDO = re.compile(r"^[a-z0-9][a-z0-9_-]*$")
 PADRAO = {"cena": "cena", "tamanho": [320, 180], "estilo": "snes-diurno", "laco": True, "seed": 0,
           "ampliar": 1, "saida": "tudo"}
@@ -86,6 +91,13 @@ class Camada:
 
 
 @dataclass
+class Animacao:
+    quadros: int
+    duracao: int  # ms por quadro
+    voltas: int  # voltas da camada mais perto (profundidade 0) no laço inteiro
+
+
+@dataclass
 class Receita:
     cena: str
     largura: int
@@ -97,6 +109,7 @@ class Receita:
     saida: str
     camadas: list[Camada]
     descricao: str = ""
+    animacao: Animacao | None = None
     original: dict[str, Any] = field(default_factory=dict, repr=False)
 
 
@@ -111,7 +124,9 @@ def descrever_campos() -> str:
     """Linha com os campos do topo da receita e o padrão de cada um."""
     partes = [f"{campo}={json.dumps(valor, ensure_ascii=False)}" for campo, valor in PADRAO.items()]
     partes[list(PADRAO).index("saida")] += " (" + "|".join(json.dumps(s) for s in SAIDAS) + ")"
+    animacao = json.dumps(ANIMACAO_PADRAO)
     return ("receita: " + ", ".join(partes) + ", descricao (texto livre), "
+            f"animacao={animacao} (opcional: grava GIF, folha de quadros e JSON de tempo), "
             'camadas=[{"forma": ..., "nome": ..., parâmetros}] (obrigatório, do fundo para a frente)')
 
 
@@ -235,6 +250,8 @@ def validar_receita(fonte: "str | Path | dict[str, Any]") -> Receita:
     if not isinstance(r.get("descricao", ""), str):
         erros.append("descricao deve ser texto")
 
+    animacao = _validar_animacao(dados.get("animacao"), largura, altura, erros) if "animacao" in dados else None
+
     camadas: list[Camada] = []
     lista = dados.get("camadas")
     if not isinstance(lista, list) or not lista:
@@ -255,7 +272,42 @@ def validar_receita(fonte: "str | Path | dict[str, Any]") -> Receita:
         raise ErroDeReceita(erros)
     return Receita(cena=cena, largura=largura, altura=altura, estilo=estilo, laco=r["laco"], seed=r["seed"],
                    ampliar=ampliar, saida=r["saida"], camadas=camadas, descricao=r.get("descricao", ""),
-                   original=dados)
+                   animacao=animacao, original=dados)
+
+
+def colunas_da_folha(quadros: int, largura: int) -> int:
+    """Quadros por linha da folha: o máximo que cabe em `AMPLIADO_MAXIMO` de largura."""
+    return max(1, min(quadros, AMPLIADO_MAXIMO // max(1, largura)))
+
+
+def _validar_animacao(valor: Any, largura: int, altura: int, erros: list[str]) -> Animacao | None:
+    if not isinstance(valor, dict):
+        erros.append(f"animacao deve ser um objeto como {json.dumps(ANIMACAO_PADRAO)}, veio {valor!r}")
+        return None
+    for campo in valor:
+        if campo not in ANIMACAO_PADRAO:
+            erros.append(_desconhecido(campo, "animacao", ANIMACAO_PADRAO))
+    a = {**ANIMACAO_PADRAO, **valor}
+    limites = {"quadros": (2, QUADROS_MAXIMO), "duracao": (10, DURACAO_MAXIMA), "voltas": (0, VOLTAS_MAXIMO)}
+    validos = True
+    for campo, (minimo, maximo) in limites.items():
+        v = a[campo]
+        if not isinstance(v, int) or isinstance(v, bool) or not minimo <= v <= maximo:
+            erros.append(f"animacao.{campo} deve ser inteiro de {minimo} a {maximo}, veio {v!r}")
+            validos = False
+    if not validos:
+        return None
+    if a["duracao"] % 10:
+        erros.append(f"animacao.duracao anda de 10 em 10 ms (o GIF guarda centésimos), veio {a['duracao']}; "
+                     f"use {a['duracao'] // 10 * 10 or 10} ou {a['duracao'] // 10 * 10 + 10}")
+    if largura:
+        colunas = colunas_da_folha(a["quadros"], largura)
+        linhas = -(-a["quadros"] // colunas)
+        folha_cabe = largura * colunas <= AMPLIADO_MAXIMO and altura * linhas <= AMPLIADO_MAXIMO
+        if not folha_cabe:
+            erros.append(f"a folha de {a['quadros']} quadros ficaria com {largura * colunas}x{altura * linhas} pixels e "
+                         f"o máximo é {AMPLIADO_MAXIMO} por lado; reduza animacao.quadros ou tamanho")
+    return Animacao(quadros=a["quadros"], duracao=a["duracao"], voltas=a["voltas"])
 
 
 def _validar_camada(i: int, item: Any, r: dict[str, Any], seed_receita: int, erros: list[str]) -> Camada | None:

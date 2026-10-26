@@ -1,7 +1,7 @@
 """Linha de comando. Tudo responde em texto curto.
 
     python -m pixel_atelier gerar receita.json [--pasta saida]   # "-" lê a receita da entrada padrão
-    python -m pixel_atelier revisar cena.png [--fundo cena.png] [--estilo nome] [--laco]   # relatório em texto; laço pela marca do gerar
+    python -m pixel_atelier revisar cena.png [--fundo cena.png] [--estilo nome] [--laco]   # relatório em texto; laço pela marca do gerar; GIF: tempo por quadro
     python -m pixel_atelier formas                               # campos da receita e parâmetros de cada forma, com o padrão
     python -m pixel_atelier estilos                              # presets disponíveis
     python -m pixel_atelier registrar-estilo estilo.json [--nome nome] [--sobrescrever]
@@ -113,7 +113,7 @@ def main(argv: list[str] | None = None) -> int:
     p.set_defaults(funcao=_gerar)
 
     p = comandos.add_parser("revisar", help="confere uma imagem pelas regras de pixel art")
-    p.add_argument("imagem", type=Path, help="PNG da cena ou do sprite (ampliado também serve)")
+    p.add_argument("imagem", type=Path, help="PNG da cena ou do sprite (ampliado também serve), ou GIF e folha da animação")
     p.add_argument("--camadas", type=Path, help="pasta das camadas (padrão: a pasta <cena>/ ao lado, se existir)")
     p.add_argument("--fundo", type=Path, help="cena por trás do sprite, para medir contraste e legibilidade")
     p.add_argument("--posicao", type=int, nargs=2, metavar=("X", "Y"),

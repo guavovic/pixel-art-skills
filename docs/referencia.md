@@ -32,6 +32,7 @@ A cena inteira cabe num JSON curto. Só `camadas` é obrigatório; as camadas v�
 | `seed` | `0` | sorteia as camadas sem `seed` própria; camada com `seed` fica fixa |
 | `ampliar` | `1` | grava também o composto ampliado N vezes (de 1 a 16; o ampliado fica com no máximo 4096 por lado) |
 | `saida` | `"tudo"` | `"tudo"`, `"composto"` ou `"camadas"` |
+| `animacao` | nenhuma | cenário vivo: `{"quadros": 48, "duracao": 100, "voltas": 2}` (ver abaixo) |
 | `camadas` | obrigatório | `forma`, `nome` opcional e os parâmetros da forma |
 
 ```
@@ -57,6 +58,35 @@ camadas em saida/vale (seed, área coberta, cores):
 ```
 
 Camada vazia ou que tapa a tela inteira sai como `aviso:` no fim.
+
+### Animação
+
+Com `animacao`, as camadas que já existem ganham movimento num laço que fecha sem emenda (exemplo em `exemplos/snes-diurno-animado.json`):
+
+| Campo | Padrão | O que é |
+| --- | --- | --- |
+| `quadros` | `48` | quadros no laço (2 a 256) |
+| `duracao` | `100` | ms por quadro, de 10 em 10 (o GIF guarda centésimos) |
+| `voltas` | `2` | voltas que a camada mais perto dá na largura durante o laço (0 a 16) |
+
+Cada camada é desenhada uma vez e anda inteira, para a esquerda: a de profundidade `p` dá `round(voltas x (1 - p))` voltas (o céu, no fundo, fica parado), nuvem e névoa ganham 1 volta de vento e raios pulsam. Como toda camada dá voltas inteiras, o quadro depois do último é o primeiro; o quadro 0 é o composto parado. O passo sai da largura (`voltas x largura / quadros` pixels por quadro na camada mais perto), então a mesma receita anima igual em qualquer tamanho e estilo. Camada sem laço fica parada.
+
+Com `saida` `"tudo"` ou `"composto"`, grava além dos PNGs:
+
+- `<cena>.gif` (ou `<cena>-Nx.gif`, ampliado pelo `ampliar`), para ver; uma paleta só, cor exata e alfa 0 ou 255 (acima de 256 cores o GIF sai com a paleta reduzida e o resumo avisa);
+- `<cena>-quadros.png`: os quadros lado a lado no tamanho real, quantos couberem em 4096 de largura por linha; a folha também fica com no máximo 4096 por lado;
+- `<cena>-quadros.json`, para o jogo:
+
+```json
+{"cena": "vale", "folha": "vale-quadros.png", "quadros": 48, "duracao": 100, "quadro": [320, 180], "colunas": 12, "linhas": 4, "laco": true}
+```
+
+O resumo ganha duas linhas:
+
+```
+animação: 48 quadros de 100 ms (4,8 s por laço), voltas 2: saida/vale.gif, saida/vale-quadros.png, saida/vale-quadros.json
+movimento: ceu parada, montanhas parada, arvore 1 volta, chao 2 voltas
+```
 
 Os presets do usuário ficam em `~/.pixel-atelier/estilos` (ou na pasta da variável `PIXEL_ATELIER_ESTILOS`). Os nomes do pacote são reservados. O nome do preset é o do arquivo, minúsculo com hífens: um JSON copiado à mão com outro nome (`Meu_Estilo.json`) não carrega por nome até ser renomeado (`meu-estilo.json`); o `estilos` avisa, e o erro de carregar diz o nome certo.
 
@@ -125,6 +155,7 @@ O cliente MCP sobe o servidor com o PATH dele, então o `python` que ele acha pr
 python -m pixel_atelier revisar saida/vale.png [--estilo snes-diurno]     # acha as camadas em saida/vale/
 python -m pixel_atelier revisar heroi.png --fundo saida/vale.png [--posicao 40 120]
 python -m pixel_atelier revisar saida/vale.png --laco                    # força a emenda numa imagem sem a marca de laço
+python -m pixel_atelier revisar saida/vale.gif                           # animação: tempo por quadro e o primeiro quadro
 ```
 
 O laço se confere sozinho: o `gerar` grava em cada PNG (composto, ampliado e camadas) um texto `pixel-atelier:laco` com `sim` ou `nao`, e o `revisar` confere a emenda quando a marca diz `sim`. `--laco` força a conferência numa imagem sem a marca (salva de novo por outro programa, por exemplo, que costuma descartar o texto do PNG); `laco=False` em Python, ou `false` na ferramenta MCP, pula.
@@ -148,6 +179,7 @@ pulada matiz da rampa: sem estilo (passe estilo: as rampas vêm dele)
 ok contorno preto: nenhuma silhueta com contorno de uma cor só
 ok anti-alias [heurística]: 1 silhueta, nenhuma com meio-tom em 80%+ da borda nos 4 lados
 ok linha 2:1 [heurística]: nenhuma linha 2:1 (6+ degraus de 2)
+pulada tempo: imagem parada (sem quadros)
 ```
 
 Com problema, a linha diz o quanto e onde, por exemplo `alerta legibilidade: frente some no fundo em 100% da borda (máx 25%), x15-32 y17-30; ...`. Alerta de contraste ou de legibilidade termina com a ação: aumentar o contraste de valor da frente, nunca escurecer nem apagar o fundo. Os alertas de matiz da rampa, contorno preto, anti-alias e linha 2:1 terminam com o capítulo do guia que explica a correção (`guia cor`, `guia fundamentos`, `guia angulo`).
@@ -167,8 +199,9 @@ Com problema, a linha diz o quanto e onde, por exemplo `alerta legibilidade: fre
 | contorno preto | todos os contornos (borda com 85%+ numa cor só, diferente do miolo) em preto puro, canal até 8 |
 | anti-alias | meio-tom (alfa parcial, ou valor entre o de dentro e o de trás) em 80%+ da borda em cada um dos 4 lados |
 | linha 2:1 | degrau de 1 ou 3 entre dois de 2 numa linha 2:1 (6+ degraus, 85%+ deles de 2) |
+| tempo | GIF ou folha de quadros (com o `-quadros.json` ao lado): quadro com menos de 20 ms ou mais de 300 ms |
 
-Valor é a luminância (o teste em escala de cinza). A visão (lateral, 3/4, isométrica) e o tempo de animação não são conferidos: dependem do que a imagem quer ser, e ficam para a aprovação final. Contraste, legibilidade e silhuetas pedem as camadas (a pasta que `gerar` grava, achada sozinha, ou `--camadas`) ou um `--fundo`. Sem eles, numa cena opaca, o `revisar` separa as silhuetas pelo próprio composto (cores que se tocam muito e são parecidas ficam na mesma silhueta) e mede contraste (a mediana da borda entre elas, mín 0,05) e legibilidade (a borda das que chegam no pé da imagem, as da frente), marcados `[heurística]`; duas camadas com cores quase iguais viram uma silhueta só, então ali o composto não acusa. Pillow shading e serrilhado continuam `pulada` sem camadas: no composto a silhueta se corta na que está na frente. Imagem ampliada (`-3x.png`) é revisada no tamanho real. As regras marcadas `[heurística]` são aproximações: confira na aprovação final. Névoa e raios em pontilhado ficam fora do contraste, porque são transparentes de propósito. Os limiares ficam no topo de `revisao.py`; o porquê de cada número está no capítulo da regra no guia.
+Valor é a luminância (o teste em escala de cinza). A visão (lateral, 3/4, isométrica) não é conferida: depende do que a imagem quer ser, e fica para a aprovação final. Contraste, legibilidade e silhuetas pedem as camadas (a pasta que `gerar` grava, achada sozinha, ou `--camadas`) ou um `--fundo`. Sem eles, numa cena opaca, o `revisar` separa as silhuetas pelo próprio composto (cores que se tocam muito e são parecidas ficam na mesma silhueta) e mede contraste (a mediana da borda entre elas, mín 0,05) e legibilidade (a borda das que chegam no pé da imagem, as da frente), marcados `[heurística]`; duas camadas com cores quase iguais viram uma silhueta só, então ali o composto não acusa. Pillow shading e serrilhado continuam `pulada` sem camadas: no composto a silhueta se corta na que está na frente. Imagem ampliada (`-3x.png`) é revisada no tamanho real. As regras marcadas `[heurística]` são aproximações: confira na aprovação final. Névoa e raios em pontilhado ficam fora do contraste, porque são transparentes de propósito. Os limiares ficam no topo de `revisao.py`; o porquê de cada número está no capítulo da regra no guia.
 
 ## Estilo por referência
 

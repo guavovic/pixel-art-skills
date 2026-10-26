@@ -62,6 +62,15 @@ def test_gerar_com_texto_json_grava_na_raiz(tmp_path):
     assert not erro and (tmp_path / "mcp.png").is_file()
 
 
+def test_gerar_com_animacao_grava_gif_e_folha(tmp_path):
+    animada = {**PEQUENA, "animacao": {"quadros": 4}}
+    erro, texto = chamar(criar_servidor(tmp_path), "gerar", receita=animada, pasta="saida")
+    assert not erro and "animação: 4 quadros de 100 ms" in texto
+    assert all((tmp_path / "saida" / f"mcp{sufixo}").is_file() for sufixo in (".gif", "-quadros.png", "-quadros.json"))
+    erro, texto = chamar(criar_servidor(tmp_path), "revisar", imagem="saida/mcp.gif")
+    assert not erro and "ok tempo: 4 quadros de 100 ms" in texto
+
+
 def test_receita_invalida_volta_a_lista_de_problemas(tmp_path):
     ruim = {"tamanho": [100, 32], "camadas": [{"forma": "arvores"}]}
     erro, texto = chamar(criar_servidor(tmp_path), "gerar", receita=ruim, pasta="saida")

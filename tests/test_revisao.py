@@ -459,7 +459,7 @@ def test_cena_do_gerar_acha_as_camadas_e_responde_curto(tmp_path):
     assert revisao.camadas == ["01-ceu", "02-arvore", "03-chao"]
     linhas = revisao.resumo().splitlines()
     assert linhas[0].startswith("vale.png: 96x64, cena com 3 camadas, ")
-    assert len(linhas) == 14 and all(linha.split()[0] in ("ok", "alerta", "pulada") for linha in linhas[1:])
+    assert len(linhas) == 15 and all(linha.split()[0] in ("ok", "alerta", "pulada") for linha in linhas[1:])
     assert sum("[heurística]" in linha for linha in linhas) == 6
     assert len(revisao.resumo()) < 1200  # é o que o agente lê no lugar da imagem
     ampliada = revisar(tmp_path / "vale-2x.png")

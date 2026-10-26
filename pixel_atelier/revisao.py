@@ -62,6 +62,11 @@ olhar valor e não matiz é o teste da imagem em escala de cinza.
 - linha 2:1 (heurística): escada de 6+ degraus (sem as pontas) com 85% ou mais de degraus de 2 é
   linha isométrica; degrau de 1 ou 3 entre dois de 2 é alerta (o serrilhado genérico não pega 2,1,2).
 
+- tempo (animação: GIF com mais de um quadro, ou a folha `<cena>-quadros.png` com o JSON de tempo
+  ao lado): cada quadro dura de 20 a 300 ms. Abaixo de 20 ms o navegador troca o tempo do GIF por
+  100 ms; acima de 300 ms (o quadro mais lento da tabela do guia) o movimento vira sequência de
+  fotos. Imagem parada pula. A revisão das outras regras usa o primeiro quadro.
+
 Cada limiar está explicado no capítulo da regra no guia (`pixel_atelier/guia/`, índice em
 `indice.md`); mudou aqui, muda lá.
 
@@ -71,6 +76,7 @@ contraste e das silhuetas, porque ela é transparente de propósito.
 from __future__ import annotations
 
 import colorsys
+import json
 import math
 import sys
 from collections import Counter
@@ -116,6 +122,8 @@ PRETO = 8  # canal até isso (#080808): preto puro
 AA_LADO = 0.8  # fração da borda em meio-tom, em cada um dos 4 lados, para ser anti-alias em volta da forma
 ISO_DEGRAUS = 6  # degraus de uma linha (sem as pontas) para ela contar como linha 2:1
 ISO_DOIS = 0.85  # fração desses degraus com 2 pixels para a linha ser 2:1 (1 fora do 2 a cada 7)
+TEMPO_MINIMO = 20  # ms; GIF com 0 ou 10 ms o navegador toca a 100 ms
+TEMPO_MAXIMO = 300  # ms; o quadro mais lento da tabela de tempo do guia (parado, respiração)
 DICA_CONTRASTE = ("aumente o contraste de valor da frente (clareie ou escureça a frente ou o contorno), "
                   "nunca escureça nem apague o fundo")
 
@@ -197,6 +205,34 @@ def _ler_camadas(camadas: "str | Path | Sequence[str | Path | Image.Image]") -> 
         nome = Path(c).stem if isinstance(c, (str, Path)) else f"{i + 1:02d}"
         lidas.append((nome, abrir(c)))
     return lidas
+
+
+def _animacao(arquivo: Path) -> tuple[Image.Image, list[int], Path] | None:
+    """Primeiro quadro, duração de cada quadro e o PNG parado da cena (onde achar as camadas).
+
+    Vale para o GIF com mais de um quadro e para a folha com o JSON de tempo ao lado; None para o resto.
+    """
+    if arquivo.suffix.lower() == ".gif":
+        with Image.open(arquivo) as gif:
+            if getattr(gif, "n_frames", 1) < 2:
+                return None
+            primeiro = gif.convert("RGBA")
+            duracoes = []
+            for i in range(gif.n_frames):
+                gif.seek(i)
+                duracoes.append(int(gif.info.get("duration", 0)))
+        return primeiro, duracoes, arquivo
+    tempo = arquivo.with_suffix(".json")
+    if not tempo.is_file():
+        return None
+    try:
+        dados = json.loads(tempo.read_text(encoding="utf-8"))
+        largura, altura = dados["quadro"]
+        quadros, duracao = int(dados["quadros"]), int(dados["duracao"])
+    except (ValueError, KeyError, TypeError):
+        return None
+    primeiro = abrir(arquivo).crop((0, 0, largura, altura))
+    return primeiro, [duracao] * quadros, arquivo.parent / f"{dados.get('cena', arquivo.stem)}.png"
 
 
 # --- medidas de apoio ----------------------------------------------------------------------------
@@ -777,6 +813,22 @@ def _rampa_matiz(alvo: Image.Image, estilo: Estilo | None) -> Checagem:
                     f"{estilo.nome}, menor mudança {muda:.0f}° em {papel} (mín {RAMPA_MATIZ}°)")
 
 
+def _tempo(duracoes: list[int] | None) -> Checagem:
+    if duracoes is None:
+        return Checagem("tempo", "pulada", "imagem parada (sem quadros)")
+    menor, maior = min(duracoes), max(duracoes)
+    faixa = f"{len(duracoes)} quadros de {menor} ms" if menor == maior else f"{len(duracoes)} quadros de {menor} a {maior} ms"
+    rapidos = sum(d < TEMPO_MINIMO for d in duracoes)
+    lentos = sum(d > TEMPO_MAXIMO for d in duracoes)
+    if rapidos:
+        return Checagem("tempo", "alerta", f"{faixa}; {rapidos} abaixo de {TEMPO_MINIMO} ms (o navegador toca a "
+                                           "100 ms); use 20 ms ou mais (guia animacao)")
+    if lentos:
+        return Checagem("tempo", "alerta", f"{faixa}; {lentos} acima de {TEMPO_MAXIMO} ms vira sequência de fotos; "
+                                           "use mais quadros com tempo menor (guia animacao)")
+    return Checagem("tempo", "ok", f"{faixa}, entre {TEMPO_MINIMO} e {TEMPO_MAXIMO} ms")
+
+
 def _contorno_preto(silhuetas: list[tuple[str, _Px, dict[tuple[int, int], int]]]) -> Checagem:
     """Contorno é a borda quase toda numa cor só, diferente do miolo; alerta se todos forem preto puro."""
     if not silhuetas:
@@ -903,7 +955,13 @@ def revisar(
     Arquivo que não abre ou tamanhos que não batem levantam `ValueError` ou `OSError`.
     """
     nome = Path(imagem).name if isinstance(imagem, (str, Path)) else "imagem"
-    original = abrir(imagem)
+    animada = _animacao(Path(imagem)) if isinstance(imagem, (str, Path)) else None
+    duracoes = None
+    parada = imagem
+    if animada is None:
+        original = abrir(imagem)
+    else:
+        original, duracoes, parada = animada
     marca = marca_de_laco(imagem) if laco is None and isinstance(imagem, (str, Path)) else None
     if isinstance(estilo, str):
         estilo = carregar_estilo(estilo)
@@ -911,7 +969,7 @@ def revisar(
     lidas: list[tuple[str, Image.Image]] = []
     if fundo is None:
         if camadas is None and isinstance(imagem, (str, Path)):
-            camadas = _camadas_ao_lado(Path(imagem)) or None
+            camadas = _camadas_ao_lado(Path(parada)) or None
         if camadas is not None:
             lidas = _ler_camadas(camadas)
     if lidas:  # as camadas dizem o tamanho real
@@ -987,6 +1045,7 @@ def revisar(
         _contorno_preto(silhuetas),
         _anti_alias(silhuetas, atras_de),
         _linha_iso(silhuetas),
+        _tempo(duracoes),
     ]
     return Revisao(nome=nome, largura=alvo.width, altura=alvo.height, tipo=tipo, escala=escala,
                    camadas=[n for n, _ in lidas], checagens=checagens, imagem=alvo)

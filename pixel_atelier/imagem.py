@@ -30,6 +30,9 @@ def marca_de_laco(arquivo: "str | Path") -> bool | None:
     """O que o `gerar` gravou no PNG: True (cena com laço), False (sem laço) ou None (sem marca)."""
     with Image.open(arquivo) as aberta:
         valor = aberta.info.get(MARCA_LACO)
+        comentario = aberta.info.get("comment")
+    if isinstance(comentario, bytes) and comentario.startswith(f"{MARCA_LACO}=".encode()):
+        valor = comentario.decode().partition("=")[2]  # o GIF não tem bloco de texto: a marca vai no comentário
     return {"sim": True, "nao": False}.get(valor) if isinstance(valor, str) else None
 
 
