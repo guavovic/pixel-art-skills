@@ -12,7 +12,7 @@ Ler um capítulo: `python -m pixel_atelier guia <capitulo>`, a ferramenta MCP `g
 | `escala` | tamanho do sprite, pixels por unidade, ampliar | escala |
 | `luz` | volume, direção da luz, sombra, luz de contorno | pillow shading |
 | `pontilhado` | degradê, névoa, transição de tom | pixel solto (exceção) |
-| `animacao` | quadros, tempo, ciclo de andar | - |
+| `animacao` | quadros, tempo, ciclo de andar, cenário animado | tempo |
 | `composicao` | camadas, profundidade, onde está o foco, laço | contraste, composição repetida, laço |
 | `estilos` | SNES, Game Boy, metroidvania moderno | cores (com `--estilo`) |
 | `erros` | a arte "não lê", personagem some, fundo apagado | legibilidade, contraste |

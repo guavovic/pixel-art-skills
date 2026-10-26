@@ -64,7 +64,7 @@ def criar_servidor(raiz: str | Path | None = None) -> MCPServer:
         receita: Annotated[dict[str, Any] | str, Field(description="objeto da receita ou caminho do JSON")],
         pasta: Annotated[str | None, Field(description="onde gravar (padrão: ao lado da receita, ou a raiz)")] = None,
     ) -> str:
-        """Desenha a receita, grava os PNGs e responde com o resumo (arquivos, cores, cada camada)."""
+        """Desenha a receita e grava os PNGs (com animacao, também GIF e folha de quadros); responde com o resumo."""
         if isinstance(receita, str) and not receita.lstrip().startswith("{"):
             arquivo = dentro_da_raiz(raiz, receita, "receita")
             if not arquivo.is_file():
@@ -81,7 +81,7 @@ def criar_servidor(raiz: str | Path | None = None) -> MCPServer:
 
     @ferramenta(name="revisar", annotations=SO_LEITURA)
     def _revisar(
-        imagem: Annotated[str, Field(description="caminho do PNG da cena ou do sprite")],
+        imagem: Annotated[str, Field(description="caminho do PNG da cena ou do sprite, ou do GIF da animação")],
         camadas: Annotated[str | None, Field(description="pasta das camadas (padrão: <cena>/ ao lado)")] = None,
         fundo: Annotated[str | None, Field(description="cena por trás do sprite")] = None,
         posicao: Annotated[list[int] | None, Field(description="[x, y] do sprite no fundo (padrão: no meio)",

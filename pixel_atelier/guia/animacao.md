@@ -30,7 +30,11 @@ Poucos quadros bem escolhidos valem mais que muitos quadros iguais. Silhueta mud
 - Evite: o corpo inteiro tremendo no parado; mexa 1 ou 2 partes.
 
 ## No motor
-- O motor ainda não anima. Fundo animado se faz com `deslocamento` (mesma camada, deslocada; com `laco`, dá a volta sem emenda) e com seeds diferentes para nuvem ou névoa que muda.
-- `revisar` confere quadro a quadro (cores, pixel solto, serrilhado); não confere tempo.
+- Cenário vivo: `"animacao": {"quadros": 48, "duracao": 100, "voltas": 2}` na receita. Cada camada é desenhada uma vez e anda inteira (o pontilhado anda junto, não pisca). A camada mais perto dá `voltas` voltas no laço, a funda menos (`voltas x (1 - profundidade)`, arredondado); nuvem e névoa ganham 1 volta de vento; raios pulsam. Toda camada dá voltas inteiras, então o quadro depois do último é o primeiro. Camada sem laço fica parada.
+- O passo sai da largura (`voltas x largura / quadros`), então vale em qualquer tamanho e estilo. Movimento mais lento: mais quadros ou menos voltas, não mais tempo por quadro.
+- Sai `<cena>.gif` para ver, `<cena>-quadros.png` (quadros lado a lado) e `<cena>-quadros.json` (quadros, duração em ms, tamanho do quadro, colunas) para o jogo.
+- `revisar` no GIF ou na folha confere o tempo de cada quadro e o resto das regras no primeiro quadro.
+  - `TEMPO_MINIMO` 20 ms: com 0 ou 10 ms o navegador toca o GIF a 100 ms; 20 ms é o mais rápido que toca certo.
+  - `TEMPO_MAXIMO` 300 ms: o quadro mais lento da tabela acima (parado); mais que isso vira sequência de fotos.
 
-Fontes: Raymond Schlitter, "Pixelblog 8: Intro to Animation" e "Pixelblog 25: Motion Cycles" (slynyrd.com/pixelblog-catalogue); tutoriais de Pedro Medeiros, "Squash", "Easings", "Motion Blur" (saint11.art/blog/pixel-art-tutorials).
+Fontes: Raymond Schlitter, "Pixelblog 8: Intro to Animation" e "Pixelblog 25: Motion Cycles" (slynyrd.com/pixelblog-catalogue); tutoriais de Pedro Medeiros, "Squash", "Easings", "Motion Blur" (saint11.art/blog/pixel-art-tutorials); Jeremiah Johnson (nullsleep), "Animated GIF Minimum Frame Delay Browser Compatibility Study" (2012), sobre o tempo mínimo do GIF.
