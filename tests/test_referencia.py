@@ -120,6 +120,36 @@ def test_familia_dominante_tira_o_tom_fora_do_matiz_papel_a_papel():
     assert em_alguma or r.fora_do_matiz == [verde_agua]
 
 
+def test_familia_dominante_centra_a_terra_na_cor_do_chao():
+    # noite azul com o chão quase preto na faixa de baixo, como a metroidvania-noturno
+    azuis = [(8 + 12 * i, 16 + 16 * i, 40 + 18 * i) for i in range(12)]
+    imagem = colunas(azuis + [(250, 252, 255)])
+    imagem.paste(azuis[2] + (255,), (0, 28, imagem.width, 32))
+    r = extrair_estilo(imagem, "noite")
+    terra = r.estilo["rampas"]["terra"]
+    assert terra == hexes(azuis[:5])  # o chão bem no meio, que é o tom base
+    assert media_de_valor(terra) < media_de_valor(r.estilo["rampas"]["pedra"])
+
+
+def test_terra_centrada_no_chao_tambem_fora_da_familia_dominante():
+    marrons = [(70, 35, 20), (100, 55, 30), (130, 85, 45), (160, 115, 65), (190, 150, 90)]
+    imagem = colunas(marrons + VERDE + CINZA + [(255, 255, 255)])
+    imagem.paste(marrons[1] + (255,), (0, 28, imagem.width, 32))
+    r = extrair_estilo(imagem, "chao")
+    assert r.dominante is None and r.estilo["rampas"]["terra"] == hexes(marrons[:3])
+
+
+def test_paleta_reduzida_guarda_cores_de_cada_familia():
+    # muitos verdes e poucos marrons escuros: o corte de mediana da imagem toda juntava os marrons
+    verdes = [(20 + 4 * i, 60 + 5 * i, 30 + 2 * i) for i in range(30)]
+    marrons = [(90, 50, 30), (105, 60, 35), (120, 72, 42)]
+    preto, branco = (10, 10, 12), (255, 255, 255)
+    r = extrair_estilo(colunas(verdes + marrons + CINZA + [preto, branco]), "familias", cores=12)
+    assert len(r.paleta) <= 12
+    assert r.estilo["rampas"]["terra"] == hexes(marrons)
+    assert r.contorno == preto and r.luz == branco  # o contorno e a luz ficam exatos
+
+
 def test_sem_familia_dominante_papel_vazio_continua_vindo_da_base():
     r = extrair_estilo(cena(), "sintetica")
     assert r.dominante is None and r.da_base == ["cristal"]
