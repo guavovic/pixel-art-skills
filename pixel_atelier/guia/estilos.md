@@ -22,7 +22,7 @@ Um estilo é o conjunto de limites: resolução, cores, contorno e jeito de somb
 - Preset: `metroidvania-noturno` (sombreado chapado, sem contorno no cenário, luz de contorno ciano).
 
 ## Por geração
-- Presets `8-bits`, `16-bits`, `32-bits` e `moderno`: o tema do `snes-diurno` (com a sombra da nuvem mais fria) e a técnica de cada época. `"geracao"` num estilo ou na receita troca só a técnica. Ver o capítulo `geracoes`.
+- Presets `8-bits`, `16-bits`, `32-bits` e `moderno`: o tema do `snes-diurno` e a técnica de cada época. `"geracao"` num estilo ou na receita troca só a técnica. Ver o capítulo `geracoes`.
 
 ## Estilo novo
 - A partir de um preset: `{"base": "snes-diurno", "contorno": false, "sombreamento": "chapado"}` na receita.

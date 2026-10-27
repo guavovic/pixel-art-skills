@@ -2,12 +2,5 @@
   "nome": "moderno",
   "descricao": "Pixel art moderna (HD) sobre o tema snes-diurno: 8 tons por rampa, faixas largas em degraus, textura e contorno da cor da peça, 640x360.",
   "base": "snes-diurno",
-  "geracao": "moderno",
-  "rampas": {
-    "nuvem": [
-      "#8c9cd8",
-      "#c8d8f0",
-      "#ffffff"
-    ]
-  }
+  "geracao": "moderno"
 }
