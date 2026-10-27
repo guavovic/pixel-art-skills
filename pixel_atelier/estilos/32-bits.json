@@ -2,12 +2,5 @@
   "nome": "32-bits",
   "descricao": "Técnica de 32 bits sobre o tema snes-diurno: 6 tons por rampa, faixas em dois degraus, textura leve e contorno da cor da peça, 320x240.",
   "base": "snes-diurno",
-  "geracao": 32,
-  "rampas": {
-    "nuvem": [
-      "#8c9cd8",
-      "#c8d8f0",
-      "#ffffff"
-    ]
-  }
+  "geracao": 32
 }
