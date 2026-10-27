@@ -28,8 +28,12 @@ Formato do dicionário (sem `base`, só `nome`, `ceu`, `atmosfera`, `luz` e `ram
       "luz_contorno": true,            # borda clara do lado da luz
       "direcao_luz": [-1, -1],         # de onde vem a luz (x, y): -1, -1 é de cima à esquerda
       "largura_faixa": 2,              # espessura das faixas de luz e sombra, em pixels
-      "tom_base": 0.5                  # posição do tom médio na rampa, de 0 a 1
+      "tom_base": 0.5,                 # posição do tom médio na rampa, de 0 a 1
+      "geracao": 16                    # opcional: técnica de uma época (8, 16, 32, "moderno"); ver geracao.py
     }
+
+Com `geracao`, a época manda na técnica (passos das rampas, grade e limite de cores, sombreamento,
+largura e degraus das faixas, contorno e textura) e o tema continua mandando nas cores.
 """
 from __future__ import annotations
 
@@ -46,6 +50,7 @@ from typing import Any, Iterator
 
 from .cor import (RGB, cor_mais_proxima, gerar_rampa, hex_para_rgb, luminancia, misturar, rgb_para_hex, sem_quase_iguais,
                   sem_repetir)
+from .geracao import Geracao, geracao as ler_geracao, na_grade, reduzir_paleta
 
 PAPEIS = ("folha", "tronco", "pedra", "terra", "grama", "cristal", "nuvem", "nevoa", "neve")
 
@@ -74,6 +79,22 @@ def _ler_rampa(valor: Any) -> list[RGB]:
     raise ValueError(f"rampa inválida: {valor!r}")
 
 
+def _rampa_da_geracao(valor: Any, passos: int) -> Any:
+    """A rampa com `passos` tons: a gerada ganha os passos, a lista é reamostrada de ponta a ponta."""
+    if isinstance(valor, dict):
+        return {**valor, "passos": passos}
+    cores = _ler_rampa(valor)
+    if len(cores) < 2 or len(cores) == passos:
+        return valor
+    saida = []
+    for i in range(passos):
+        posicao = i * (len(cores) - 1) / (passos - 1)
+        antes = int(posicao)
+        depois = min(antes + 1, len(cores) - 1)
+        saida.append(rgb_para_hex(misturar(cores[antes], cores[depois], posicao - antes)))
+    return saida
+
+
 @dataclass
 class Estilo:
     nome: str
@@ -92,6 +113,10 @@ class Estilo:
     direcao_luz: tuple[int, int] = (-1, -1)
     largura_faixa: int = 2
     tom_base: float = 0.5
+    degraus: int = 1
+    textura: float = 0.0
+    selout: bool = False
+    geracao: Geracao | None = None
     origem: dict[str, Any] = field(default_factory=dict, repr=False)
     _cache: dict = field(default_factory=dict, repr=False, compare=False)
 
@@ -134,6 +159,10 @@ class Estilo:
         for chave in ("nome", "ceu", "atmosfera", "luz", "rampas"):
             if chave not in dados:
                 raise ValueError(f"estilo sem o campo obrigatório {chave!r}")
+        epoca = None
+        if "geracao" in dados:
+            epoca = ler_geracao(dados["geracao"])
+            dados = _com_a_tecnica(dados, epoca)
         sombreamento = dados.get("sombreamento", "faixas")
         if sombreamento not in SOMBREAMENTOS:
             raise ValueError(f"sombreamento deve ser um de {SOMBREAMENTOS}, veio {sombreamento!r}")
@@ -159,6 +188,8 @@ class Estilo:
             if "contorno_cor" in dados:
                 cores.append(hex_para_rgb(dados["contorno_cor"]))
             paleta = sem_quase_iguais(cores)  # rampa misturada com a atmosfera cai a 1 ou 2 de outra cor
+        if epoca is not None:
+            paleta = reduzir_paleta(sem_repetir(na_grade(c, epoca.grade) for c in paleta), epoca.cores_cena)
         if len(paleta) > 256:
             raise ValueError(f"paleta com {len(paleta)} cores; o limite é 256")
 
@@ -190,12 +221,16 @@ class Estilo:
             direcao_luz=direcao,  # type: ignore[arg-type]
             largura_faixa=max(1, int(dados.get("largura_faixa", 2))),
             tom_base=float(dados.get("tom_base", 0.5)),
+            degraus=epoca.degraus if epoca else 1,
+            textura=epoca.textura if epoca else 0.0,
+            selout=epoca is not None and epoca.contorno == "selout",
+            geracao=epoca,
             origem=dict(dados),
         )
 
     def para_dicionario(self) -> dict[str, Any]:
         """Dicionário pronto para JSON, já resolvido (paleta fechada, rampas em hex)."""
-        return {
+        dados = {
             "nome": self.nome,
             "descricao": self.descricao,
             "ceu": [rgb_para_hex(c) for c in self.ceu],
@@ -213,6 +248,23 @@ class Estilo:
             "largura_faixa": self.largura_faixa,
             "tom_base": self.tom_base,
         }
+        if self.geracao is not None:
+            dados["geracao"] = self.geracao.numero
+        return dados
+
+
+def _com_a_tecnica(dados: dict[str, Any], epoca: Geracao) -> dict[str, Any]:
+    """Os campos de técnica do estilo trocados pelos da geração; as cores do tema ficam."""
+    novos = {
+        **dados,
+        "rampas": {papel: _rampa_da_geracao(valor, epoca.passos) for papel, valor in dados["rampas"].items()},
+        "sombreamento": epoca.sombreamento,
+        "largura_faixa": epoca.largura_faixa,
+        "contorno": True,
+    }
+    if epoca.contorno == "preto":
+        novos["contorno_cor"] = "#000000"
+    return novos
 
 
 # --- presets ---------------------------------------------------------------------------------
