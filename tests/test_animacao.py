@@ -9,9 +9,10 @@ from PIL import Image, ImageSequence
 
 from pixel_atelier import ErroDeReceita, cores_usadas, gerar, revisar, validar_receita
 from pixel_atelier.__main__ import main
-from pixel_atelier.animacao import Animador, deslocamento_no_quadro, fator_do_pulso, folha
+from pixel_atelier.animacao import (Animador, deslocamento_no_quadro, fator_do_pulso, folha, gravar_gif, movimentos,
+                                    voltas_por_profundidade)
 from pixel_atelier.estilo import carregar_estilo
-from pixel_atelier.revisao import TEMPO_MAXIMO, TEMPO_MINIMO
+from pixel_atelier.revisao import LACO_QUADROS, TEMPO_MAXIMO, TEMPO_MINIMO
 
 EXEMPLOS = Path(__file__).resolve().parent.parent / "exemplos"
 
@@ -82,6 +83,7 @@ def test_movimento_pela_profundidade_vento_e_pulso():
     assert movimento["ceu"].voltas == 0
     assert movimento["nuvem"].voltas == round(2 * (1 - 0.9)) + 1
     assert movimento["longe"].voltas == 1 and movimento["chao"].voltas == 2
+    assert movimento["chao"].passo == 2 * 96 / 8
     assert movimento["raios"].pulsa and not movimento["chao"].pulsa
     assert fator_do_pulso(0, 8) == 1 and fator_do_pulso(8, 8) == 1 and fator_do_pulso(2, 8) < 1
 
@@ -104,6 +106,64 @@ def test_anima_em_qualquer_estilo_e_tamanho(nome, tamanho):
     assert animador.quadro(4).tobytes() == resultado.quadros[0].tobytes()
 
 
+PARALLAX = {**VIVA, "tamanho": [320, 180], "animacao": {"quadros": 96, "voltas": 4}, "camadas": [
+    {"forma": "ceu"},
+    {"forma": "terreno", "nome": "montanhas", "profundidade": 0.85, "base": 0.6},
+    {"forma": "arvore", "nome": "pinheiros", "profundidade": 0.65, "base": 0.7},
+    {"forma": "arvore", "nome": "mata", "profundidade": 0.35, "base": 0.8},
+    {"forma": "terreno", "nome": "chao", "base": 0.9},
+]}
+
+
+def _voltas(receita) -> dict[str, int]:
+    r = validar_receita(receita)
+    return {c.nome: m.voltas for c, m in zip(r.camadas, movimentos(r.camadas, r.animacao, r.largura))}
+
+
+def test_profundidades_diferentes_andam_em_velocidades_diferentes():
+    assert _voltas(PARALLAX) == {"ceu": 0, "montanhas": 1, "pinheiros": 2, "mata": 3, "chao": 4}
+
+
+def test_mais_profundidades_que_voltas_arredonda_e_nao_para_ninguem():
+    assert voltas_por_profundidade([1.0, 0.95, 0.85, 0.65, 0.35, 0.0], 4) == {
+        1.0: 0, 0.95: 1, 0.85: 1, 0.65: 1, 0.35: 3, 0.0: 4}
+    assert voltas_por_profundidade([0.9, 0.0], 0) == {0.9: 0, 0.0: 0}
+
+
+def test_profundidades_distintas_respeitam_a_ordem_e_o_teto():
+    for voltas in range(1, 9):
+        for quantas in range(1, voltas + 1):
+            profundidades = [round(0.99 * i / quantas, 3) for i in range(quantas)]
+            saida = voltas_por_profundidade(profundidades, voltas)
+            em_ordem = [saida[p] for p in sorted(profundidades, reverse=True)]
+            assert em_ordem == sorted(set(em_ordem)) and 1 <= em_ordem[0] and em_ordem[-1] <= voltas
+
+
+def test_voltas_proprias_da_camada():
+    camadas = [*PARALLAX["camadas"][:2], {**PARALLAX["camadas"][2], "voltas": 3}, *PARALLAX["camadas"][3:]]
+    voltas = _voltas({**PARALLAX, "camadas": camadas})
+    assert voltas["pinheiros"] == 3 and voltas["montanhas"] == 1 and voltas["mata"] == 3 and voltas["chao"] == 4
+    parada = _voltas({**PARALLAX, "camadas": [{**c, "voltas": 0} for c in PARALLAX["camadas"]]})
+    assert set(parada.values()) == {0}
+
+
+def test_voltas_da_camada_invalidas():
+    erros = erros_de({**VIVA, "camadas": [{"forma": "terreno", "voltas": 1.5}, {"forma": "terreno", "voltas": 17},
+                                          {"forma": "terreno", "voltas": 2, "laco": False}]})
+    assert any(e.startswith("camada 1 (terreno): voltas deve ser inteiro de 0 a 16, veio 1.5") for e in erros)
+    assert any(e.startswith("camada 2 (terreno): voltas deve ser inteiro de 0 a 16, veio 17") for e in erros)
+    assert any(e.startswith("camada 3 (terreno): voltas 2 pede laço") for e in erros)
+    validar_receita({**VIVA, "camadas": [{"forma": "terreno", "voltas": 0, "laco": False}]})
+
+
+def test_passo_por_quadro_suave_no_padrao():
+    """No padrão, a camada mais perto anda 1/24 da largura por quadro e a mais lenta 1/96."""
+    for tamanho in ([320, 180], [640, 360]):
+        r = validar_receita({**PARALLAX, "tamanho": tamanho, "animacao": {}})
+        passos = [m.passo for m in movimentos(r.camadas, r.animacao, r.largura) if m.voltas]
+        assert max(passos) <= tamanho[0] / 24 + 1e-9
+
+
 # --- saída ---------------------------------------------------------------------------------------
 
 def test_grava_gif_folha_e_tempo_coerentes(tmp_path):
@@ -122,7 +182,8 @@ def test_grava_gif_folha_e_tempo_coerentes(tmp_path):
                                           for q in resultado.quadros]
     texto = resultado.resumo()
     assert "animação: 8 quadros de 100 ms (0,8 s por laço), voltas 2" in texto
-    assert "movimento: ceu parada, nuvem 1 volta" in texto and "raios pulsa e dá 1 volta" in texto
+    assert "movimento: ceu parada, nuvem 1 volta (12,0 px/quadro)" in texto
+    assert "raios pulsa e dá 1 volta (12,0 px/quadro)" in texto
 
 
 def test_gif_com_transparencia_guarda_o_alfa(tmp_path):
@@ -149,14 +210,22 @@ def test_receita_sem_animacao_nao_grava_animacao(tmp_path):
 
 def test_exemplo_animado_valida():
     r = validar_receita(EXEMPLOS / "snes-diurno-animado.json")
-    assert r.animacao is not None and r.animacao.quadros == 48
+    assert r.animacao is not None and r.animacao.quadros == 96
 
 
 # --- validação -----------------------------------------------------------------------------------
 
 def test_animacao_vazia_usa_os_padroes():
     a = validar_receita({**VIVA, "animacao": {}}).animacao
-    assert (a.quadros, a.duracao, a.voltas) == (48, 100, 2)
+    assert (a.quadros, a.duracao, a.voltas) == (96, 100, 4)
+
+
+@pytest.mark.parametrize("tamanho, quadros, voltas", [([320, 180], 96, 4), ([640, 360], 66, 2), ([1280, 720], 15, 1)])
+def test_padrao_cabe_na_folha_e_voltas_seguem_os_quadros(tamanho, quadros, voltas):
+    a = validar_receita({**VIVA, "tamanho": tamanho, "animacao": {}}).animacao
+    assert (a.quadros, a.voltas) == (quadros, voltas)
+    assert validar_receita({**VIVA, "animacao": {"quadros": 48}}).animacao.voltas == 2
+    assert validar_receita({**VIVA, "animacao": {"quadros": 240}}).animacao.voltas == 4
 
 
 def test_animacao_invalida_junta_os_erros():
@@ -213,3 +282,31 @@ def test_linha_de_comando_gera_animacao(tmp_path, capsys):
     assert "animação: 8 quadros" in saida and "viva-quadros.json" in saida
     assert main(["revisar", str(tmp_path / "viva.gif")]) == 0
     assert "ok tempo: 8 quadros de 100 ms" in capsys.readouterr().out
+
+
+def _laco_dos_quadros(arquivo):
+    return next(c for c in revisar(arquivo).checagens if c.regra == "laço dos quadros")
+
+
+def test_revisar_confere_a_volta_do_ultimo_quadro_para_o_primeiro(tmp_path):
+    receita = json.loads((EXEMPLOS / "snes-diurno-animado.json").read_text(encoding="utf-8"))
+    resultado = gerar({**receita, "ampliar": 1, "saida": "tudo"}, pasta=tmp_path)
+    for arquivo in ("snes-diurno-animado.gif", "snes-diurno-animado-quadros.png"):
+        laco = _laco_dos_quadros(tmp_path / arquivo)
+        assert laco.estado == "ok" and f"máx {LACO_QUADROS:g}x" in laco.detalhe, arquivo
+    de_fora = tmp_path / "de-fora.gif"
+    resultado.quadros[0].save(de_fora, save_all=True, append_images=resultado.quadros[1:], duration=100, loop=0)
+    assert _laco_dos_quadros(de_fora).estado == "ok"
+    cortado = tmp_path / "cortado.gif"
+    gravar_gif(resultado.quadros[:24], cortado, 100, True)
+    laco = _laco_dos_quadros(cortado)
+    assert laco.estado == "alerta" and "pula no fim do laço" in laco.detalhe
+
+
+def test_revisar_pula_a_volta_no_gif_que_toca_uma_vez(tmp_path):
+    resultado = gerar({**VIVA, "animacao": {"quadros": 8}})
+    uma_vez = tmp_path / "uma-vez.gif"
+    resultado.quadros[0].save(uma_vez, save_all=True, append_images=resultado.quadros[1:4], duration=100)
+    assert _laco_dos_quadros(uma_vez).estado == "pulada"
+    gerar(VIVA, pasta=tmp_path)
+    assert all(c.regra != "laço dos quadros" for c in revisar(tmp_path / "viva.png").checagens)

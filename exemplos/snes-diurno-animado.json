@@ -1,11 +1,11 @@
 {
   "cena": "snes-diurno-animado",
-  "descricao": "A cena snes-diurno viva: parallax rolando no laço, nuvem e névoa com vento.",
+  "descricao": "A cena snes-diurno viva: cada plano do parallax na sua velocidade, nuvem e névoa com vento.",
   "tamanho": [320, 180],
   "estilo": "snes-diurno",
   "ampliar": 2,
   "saida": "composto",
-  "animacao": {"quadros": 48, "duracao": 100, "voltas": 2},
+  "animacao": {"quadros": 96, "duracao": 100, "voltas": 4},
   "camadas": [
     {"forma": "ceu", "seed": 1, "horizonte": 0.8, "astro": "sol", "posicao": [0.78, 0.18], "halo": 0.35},
     {"forma": "nuvem", "seed": 2, "profundidade": 0.95, "quantidade": 4, "faixa": [0.12, 0.34], "tamanho": [0.3, 0.5]},

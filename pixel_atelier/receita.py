@@ -12,7 +12,7 @@ Formato (só `camadas` é obrigatório; o resto tem padrão):
       "seed": 0,                       # sorteia as camadas que não fixam a própria seed
       "ampliar": 1,                    # grava também o composto ampliado N vezes, para olhar
       "saida": "tudo",                 # "tudo", "composto" ou "camadas"
-      "animacao": {"quadros": 48, "duracao": 100, "voltas": 2},  # opcional: GIF, folha e JSON de tempo
+      "animacao": {"quadros": 96, "duracao": 100, "voltas": 4},  # opcional: GIF, folha e JSON de tempo
       "camadas": [                     # do fundo para a frente
         {"forma": "ceu", "astro": "sol"},
         {"forma": "arvore", "nome": "mata-longe", "seed": 4, "profundidade": 0.6, "tipo": "pinheiro"}
@@ -23,6 +23,7 @@ Cada camada tem `forma` (obrigatório), `nome` (opcional, entra no nome do arqui
 da forma (`python -m pixel_atelier formas` lista todos, com o padrão). `seed`, `profundidade`,
 `laco` e `deslocamento` valem em qualquer forma. Sem `seed`, a camada usa uma seed derivada da
 seed da receita e da posição dela; com `seed`, fica fixa mesmo quando a receita muda de seed.
+Com `animacao`, `voltas` (opcional) fixa as voltas da camada no laço no lugar da profundidade.
 
 Erros saem todos de uma vez, em texto, num `ErroDeReceita`.
 """
@@ -51,7 +52,8 @@ TAMANHO_MAXIMO = 4096
 SEED_DERIVADA = 100_000  # seeds derivadas ficam curtas, fáceis de copiar para fixar uma camada
 AMPLIAR_MAXIMO = 16
 AMPLIADO_MAXIMO = 4096  # lado máximo do composto depois de `ampliar`, para não estourar a memória
-ANIMACAO_PADRAO = {"quadros": 48, "duracao": 100, "voltas": 2}
+ANIMACAO_PADRAO = {"quadros": 96, "duracao": 100, "voltas": 4}
+QUADROS_POR_VOLTA = 24  # sem `voltas`, 1 volta a cada 24 quadros (até 4): a camada mais perto anda 1/24 da largura por quadro
 QUADROS_MAXIMO = 256
 DURACAO_MAXIMA = 2000  # ms por quadro; o GIF guarda o tempo em centésimos, então a duração anda de 10 em 10
 VOLTAS_MAXIMO = 16
@@ -84,6 +86,7 @@ class Camada:
     forma: str
     nome: str
     parametros: dict[str, Any]  # já com seed, profundidade, laco e deslocamento resolvidos
+    voltas: int | None = None  # voltas próprias no laço da animação; None segue a profundidade
 
     @property
     def arquivo(self) -> str:
@@ -133,7 +136,8 @@ def descrever_campos() -> str:
 def descrever_formas() -> str:
     """Campos da receita e uma linha por forma com os parâmetros e o padrão. Serve de cola para escrever receitas."""
     linhas = [descrever_campos(),
-              "todas: seed (padrão: derivada da seed da receita), laco (padrão: o da receita), deslocamento=0"]
+              "todas: seed (padrão: derivada da seed da receita), laco (padrão: o da receita), deslocamento=0, "
+              "voltas (com animacao; padrão: pela profundidade)"]
     for forma in FORMAS:
         partes = []
         for nome, p in parametros_da_forma(forma).items():
@@ -280,6 +284,18 @@ def colunas_da_folha(quadros: int, largura: int) -> int:
     return max(1, min(quadros, AMPLIADO_MAXIMO // max(1, largura)))
 
 
+def _quadros_padrao(largura: int, altura: int) -> int:
+    """96 quadros, ou os que couberem na folha de `AMPLIADO_MAXIMO` por lado."""
+    if not largura:
+        return ANIMACAO_PADRAO["quadros"]
+    cabem = (AMPLIADO_MAXIMO // largura) * (AMPLIADO_MAXIMO // altura)
+    return max(2, min(ANIMACAO_PADRAO["quadros"], cabem))
+
+
+def _inteiro_entre(v: Any, minimo: int, maximo: int) -> bool:
+    return isinstance(v, int) and not isinstance(v, bool) and minimo <= v <= maximo
+
+
 def _validar_animacao(valor: Any, largura: int, altura: int, erros: list[str]) -> Animacao | None:
     if not isinstance(valor, dict):
         erros.append(f"animacao deve ser um objeto como {json.dumps(ANIMACAO_PADRAO)}, veio {valor!r}")
@@ -287,12 +303,15 @@ def _validar_animacao(valor: Any, largura: int, altura: int, erros: list[str]) -
     for campo in valor:
         if campo not in ANIMACAO_PADRAO:
             erros.append(_desconhecido(campo, "animacao", ANIMACAO_PADRAO))
-    a = {**ANIMACAO_PADRAO, **valor}
+    a = {**ANIMACAO_PADRAO, "quadros": _quadros_padrao(largura, altura), **valor}
+    quadros_valido = _inteiro_entre(a["quadros"], 2, QUADROS_MAXIMO)
+    if "voltas" not in valor and quadros_valido:
+        a["voltas"] = min(ANIMACAO_PADRAO["voltas"], max(1, a["quadros"] // QUADROS_POR_VOLTA))
     limites = {"quadros": (2, QUADROS_MAXIMO), "duracao": (10, DURACAO_MAXIMA), "voltas": (0, VOLTAS_MAXIMO)}
     validos = True
     for campo, (minimo, maximo) in limites.items():
         v = a[campo]
-        if not isinstance(v, int) or isinstance(v, bool) or not minimo <= v <= maximo:
+        if not _inteiro_entre(v, minimo, maximo):
             erros.append(f"animacao.{campo} deve ser inteiro de {minimo} a {maximo}, veio {v!r}")
             validos = False
     if not validos:
@@ -328,8 +347,16 @@ def _validar_camada(i: int, item: Any, r: dict[str, Any], seed_receita: int, err
         erros.append(f"{onde}: nome deve ser texto minúsculo com hífen ou sublinhado, veio {nome!r}")
 
     parametros: dict[str, Any] = {"seed": semente(seed_receita, i + 1) % SEED_DERIVADA, "laco": r["laco"]}
+    voltas = item.get("voltas")
+    if "voltas" in item and not _inteiro_entre(voltas, 0, VOLTAS_MAXIMO):
+        erros.append(f"{onde}: voltas deve ser inteiro de 0 a {VOLTAS_MAXIMO}, veio {json.dumps(voltas)}")
+        voltas = None
+    sem_laco = not item.get("laco", r["laco"])
+    if voltas and sem_laco:
+        erros.append(f"{onde}: voltas {voltas} pede laço (sem laço a borda abriria um buraco ao andar); "
+                     "tire voltas ou use \"laco\": true")
     for campo, valor in item.items():
-        if campo in ("forma", "nome"):
+        if campo in ("forma", "nome", "voltas"):
             continue
         if campo not in aceitos:
             erros.append(f"{onde}: " + _desconhecido(campo, forma, [*aceitos, "nome"]))
@@ -338,4 +365,4 @@ def _validar_camada(i: int, item: Any, r: dict[str, Any], seed_receita: int, err
         else:
             parametros[campo] = valor
     # com qualquer erro a receita inteira é recusada, então a camada pode voltar mesmo incompleta
-    return Camada(indice=i, forma=forma, nome=nome, parametros=parametros)
+    return Camada(indice=i, forma=forma, nome=nome, parametros=parametros, voltas=voltas)

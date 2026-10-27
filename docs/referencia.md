@@ -32,8 +32,8 @@ A cena inteira cabe num JSON curto. Só `camadas` é obrigatório; as camadas v�
 | `seed` | `0` | sorteia as camadas sem `seed` própria; camada com `seed` fica fixa |
 | `ampliar` | `1` | grava também o composto ampliado N vezes (de 1 a 16; o ampliado fica com no máximo 4096 por lado) |
 | `saida` | `"tudo"` | `"tudo"`, `"composto"` ou `"camadas"` |
-| `animacao` | nenhuma | cenário vivo: `{"quadros": 48, "duracao": 100, "voltas": 2}` (ver abaixo) |
-| `camadas` | obrigatório | `forma`, `nome` opcional e os parâmetros da forma |
+| `animacao` | nenhuma | cenário vivo: `{}` ou `{"quadros": 96, "duracao": 100, "voltas": 4}` (ver abaixo) |
+| `camadas` | obrigatório | `forma`, `nome` opcional, `voltas` opcional (com `animacao`) e os parâmetros da forma |
 
 ```
 python -m pixel_atelier gerar receita.json [--pasta saida]   # ou "-" para ler da entrada padrão
@@ -65,11 +65,11 @@ Com `animacao`, as camadas que já existem ganham movimento num laço que fecha 
 
 | Campo | Padrão | O que é |
 | --- | --- | --- |
-| `quadros` | `48` | quadros no laço (2 a 256) |
+| `quadros` | `96` | quadros no laço (2 a 256); no tamanho grande o padrão encolhe para a folha caber em 4096 por lado (66 em 640x360, 15 em 1280x720) |
 | `duracao` | `100` | ms por quadro, de 10 em 10 (o GIF guarda centésimos) |
-| `voltas` | `2` | voltas que a camada mais perto dá na largura durante o laço (0 a 16) |
+| `voltas` | `4` | voltas que a camada mais perto dá na largura durante o laço (0 a 16); sem ele, 1 a cada 24 quadros, até 4 |
 
-Cada camada é desenhada uma vez e anda inteira, para a esquerda: a de profundidade `p` dá `round(voltas x (1 - p))` voltas (o céu, no fundo, fica parado), nuvem e névoa ganham 1 volta de vento e raios pulsam. Como toda camada dá voltas inteiras, o quadro depois do último é o primeiro; o quadro 0 é o composto parado. O passo sai da largura (`voltas x largura / quadros` pixels por quadro na camada mais perto), então a mesma receita anima igual em qualquer tamanho e estilo. Camada sem laço fica parada.
+Cada camada é desenhada uma vez e anda inteira, para a esquerda. A mais perto dá `voltas` voltas e cada profundidade mais funda ganha uma velocidade menor, distinta enquanto houver voltas para todas (senão as vizinhas dividem, por `round(voltas x (1 - p))`); só o céu (profundidade 1) fica parado e as outras dão pelo menos 1 volta. `"voltas": N` na camada fixa a dela (pede laço). Nuvem e névoa ganham 1 volta de vento e raios pulsam. Como toda camada dá voltas inteiras, o quadro depois do último é o primeiro; o quadro 0 é o composto parado. O passo sai da largura (`voltas x largura / quadros` pixels por quadro; no padrão em 320x180, de 3,3 a 13,3), então a mesma receita anima igual em qualquer tamanho e estilo. Camada sem laço fica parada.
 
 Com `saida` `"tudo"` ou `"composto"`, grava além dos PNGs:
 
@@ -78,14 +78,14 @@ Com `saida` `"tudo"` ou `"composto"`, grava além dos PNGs:
 - `<cena>-quadros.json`, para o jogo:
 
 ```json
-{"cena": "vale", "folha": "vale-quadros.png", "quadros": 48, "duracao": 100, "quadro": [320, 180], "colunas": 12, "linhas": 4, "laco": true}
+{"cena": "vale", "folha": "vale-quadros.png", "quadros": 96, "duracao": 100, "quadro": [320, 180], "colunas": 12, "linhas": 8, "laco": true}
 ```
 
 O resumo ganha duas linhas:
 
 ```
-animação: 48 quadros de 100 ms (4,8 s por laço), voltas 2: saida/vale.gif, saida/vale-quadros.png, saida/vale-quadros.json
-movimento: ceu parada, montanhas parada, arvore 1 volta, chao 2 voltas
+animação: 96 quadros de 100 ms (9,6 s por laço), voltas 4: saida/vale.gif, saida/vale-quadros.png, saida/vale-quadros.json
+movimento: ceu parada, montanhas 1 volta (3,3 px/quadro), arvore 2 voltas (6,7 px/quadro), chao 4 voltas (13,3 px/quadro)
 ```
 
 Os presets do usuário ficam em `~/.pixel-atelier/estilos` (ou na pasta da variável `PIXEL_ATELIER_ESTILOS`). Os nomes do pacote são reservados. O nome do preset é o do arquivo, minúsculo com hífens: um JSON copiado à mão com outro nome (`Meu_Estilo.json`) não carrega por nome até ser renomeado (`meu-estilo.json`); o `estilos` avisa, e o erro de carregar diz o nome certo.
@@ -155,7 +155,7 @@ O cliente MCP sobe o servidor com o PATH dele, então o `python` que ele acha pr
 python -m pixel_atelier revisar saida/vale.png [--estilo snes-diurno]     # acha as camadas em saida/vale/
 python -m pixel_atelier revisar heroi.png --fundo saida/vale.png [--posicao 40 120]
 python -m pixel_atelier revisar saida/vale.png --laco                    # força a emenda numa imagem sem a marca de laço
-python -m pixel_atelier revisar saida/vale.gif                           # animação: tempo por quadro e o primeiro quadro
+python -m pixel_atelier revisar saida/vale.gif                           # animação: tempo, volta do último quadro ao primeiro e o primeiro quadro
 ```
 
 O laço se confere sozinho: o `gerar` grava em cada PNG (composto, ampliado e camadas) um texto `pixel-atelier:laco` com `sim` ou `nao`, e o `revisar` confere a emenda quando a marca diz `sim`. `--laco` força a conferência numa imagem sem a marca (salva de novo por outro programa, por exemplo, que costuma descartar o texto do PNG); `laco=False` em Python, ou `false` na ferramenta MCP, pula.
@@ -200,6 +200,7 @@ Com problema, a linha diz o quanto e onde, por exemplo `alerta legibilidade: fre
 | anti-alias | meio-tom (alfa parcial, ou valor entre o de dentro e o de trás) em 80%+ da borda em cada um dos 4 lados |
 | linha 2:1 | degrau de 1 ou 3 entre dois de 2 numa linha 2:1 (6+ degraus, 85%+ deles de 2) |
 | tempo | GIF ou folha de quadros (com o `-quadros.json` ao lado): quadro com menos de 20 ms ou mais de 300 ms |
+| laço dos quadros | GIF que repete ou folha: com os quadros reduzidos a 32 px de largura, a diferença do último para o primeiro passa de 1,1 vez a maior entre quadros seguidos `[heurística]` |
 
 Valor é a luminância (o teste em escala de cinza). A visão (lateral, 3/4, isométrica) não é conferida: depende do que a imagem quer ser, e fica para a aprovação final. Contraste, legibilidade e silhuetas pedem as camadas (a pasta que `gerar` grava, achada sozinha, ou `--camadas`) ou um `--fundo`. Sem eles, numa cena opaca, o `revisar` separa as silhuetas pelo próprio composto (cores que se tocam muito e são parecidas ficam na mesma silhueta) e mede contraste (a mediana da borda entre elas, mín 0,05) e legibilidade (a borda das que chegam no pé da imagem, as da frente), marcados `[heurística]`; duas camadas com cores quase iguais viram uma silhueta só, então ali o composto não acusa. Pillow shading e serrilhado continuam `pulada` sem camadas: no composto a silhueta se corta na que está na frente. Imagem ampliada (`-3x.png`) é revisada no tamanho real. As regras marcadas `[heurística]` são aproximações: confira na aprovação final. Névoa e raios em pontilhado ficam fora do contraste, porque são transparentes de propósito. Os limiares ficam no topo de `revisao.py`; o porquê de cada número está no capítulo da regra no guia.
 
