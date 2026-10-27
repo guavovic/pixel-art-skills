@@ -55,6 +55,7 @@ AMPLIADO_MAXIMO = 4096  # lado máximo do composto depois de `ampliar`, para nã
 ANIMACAO_PADRAO = {"quadros": 96, "duracao": 100, "voltas": 4}
 QUADROS_POR_VOLTA = 24  # sem `voltas`, 1 volta a cada 24 quadros (até 4): a camada mais perto anda 1/24 da largura por quadro
 QUADROS_MAXIMO = 256
+PIXELS_DA_ANIMACAO = 96 * 1280 * 720  # quadros vezes área: 96 quadros cabem até 1280x720 sem estourar a memória
 DURACAO_MAXIMA = 2000  # ms por quadro; o GIF guarda o tempo em centésimos, então a duração anda de 10 em 10
 VOLTAS_MAXIMO = 16
 NOME_VALIDO = re.compile(r"^[a-z0-9][a-z0-9_-]*$")
@@ -284,12 +285,21 @@ def colunas_da_folha(quadros: int, largura: int) -> int:
     return max(1, min(quadros, AMPLIADO_MAXIMO // max(1, largura)))
 
 
+def quadros_por_folha(quadros: int, largura: int, altura: int) -> int:
+    """Quadros numa página da folha de até `AMPLIADO_MAXIMO` por lado; o resto vai para as páginas seguintes."""
+    colunas = colunas_da_folha(quadros, largura)
+    return min(quadros, colunas * max(1, AMPLIADO_MAXIMO // max(1, altura)))
+
+
+def _quadros_que_cabem(largura: int, altura: int) -> int:
+    return max(2, min(QUADROS_MAXIMO, PIXELS_DA_ANIMACAO // max(1, largura * altura)))
+
+
 def _quadros_padrao(largura: int, altura: int) -> int:
-    """96 quadros, ou os que couberem na folha de `AMPLIADO_MAXIMO` por lado."""
+    """96 quadros, ou os que couberem em `PIXELS_DA_ANIMACAO`."""
     if not largura:
         return ANIMACAO_PADRAO["quadros"]
-    cabem = (AMPLIADO_MAXIMO // largura) * (AMPLIADO_MAXIMO // altura)
-    return max(2, min(ANIMACAO_PADRAO["quadros"], cabem))
+    return min(ANIMACAO_PADRAO["quadros"], _quadros_que_cabem(largura, altura))
 
 
 def _inteiro_entre(v: Any, minimo: int, maximo: int) -> bool:
@@ -319,13 +329,9 @@ def _validar_animacao(valor: Any, largura: int, altura: int, erros: list[str]) -
     if a["duracao"] % 10:
         erros.append(f"animacao.duracao anda de 10 em 10 ms (o GIF guarda centésimos), veio {a['duracao']}; "
                      f"use {a['duracao'] // 10 * 10 or 10} ou {a['duracao'] // 10 * 10 + 10}")
-    if largura:
-        colunas = colunas_da_folha(a["quadros"], largura)
-        linhas = -(-a["quadros"] // colunas)
-        folha_cabe = largura * colunas <= AMPLIADO_MAXIMO and altura * linhas <= AMPLIADO_MAXIMO
-        if not folha_cabe:
-            erros.append(f"a folha de {a['quadros']} quadros ficaria com {largura * colunas}x{altura * linhas} pixels e "
-                         f"o máximo é {AMPLIADO_MAXIMO} por lado; reduza animacao.quadros ou tamanho")
+    if largura and a["quadros"] > _quadros_que_cabem(largura, altura):
+        erros.append(f"{a['quadros']} quadros de {largura}x{altura} passam do limite de memória da animação "
+                     f"({_quadros_que_cabem(largura, altura)} quadros nesse tamanho); reduza animacao.quadros ou tamanho")
     return Animacao(quadros=a["quadros"], duracao=a["duracao"], voltas=a["voltas"])
 
 
