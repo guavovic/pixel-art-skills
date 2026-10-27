@@ -90,7 +90,7 @@ def _mcp(args: argparse.Namespace) -> int:
     except ImportError as erro:
         if not (erro.name or "").startswith("mcp"):
             raise
-        print("o servidor MCP precisa do extra mcp: pip install pixel-atelier[mcp]", file=sys.stderr)
+        print("o servidor MCP precisa do extra mcp: pip install pixel-art-skills[mcp]", file=sys.stderr)
         return 1
     raiz = args.raiz or Path.cwd()
     if not raiz.is_dir():

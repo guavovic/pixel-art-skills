@@ -1,6 +1,6 @@
 """Servidor MCP (stdio): as mesmas ferramentas da linha de comando, para qualquer agente que fale MCP.
 
-    pip install pixel-atelier[mcp]
+    pip install pixel-art-skills[mcp]
     pixel-atelier mcp [--raiz pasta]
 
 Toda ferramenta responde em texto curto e nunca devolve a imagem. Erro de receita volta como a

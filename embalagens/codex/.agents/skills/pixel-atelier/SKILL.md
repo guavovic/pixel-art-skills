@@ -13,7 +13,7 @@ Ateliê de pixel art para agentes de IA: técnica guardada no motor, arte saindo
 Esta embalagem registra o servidor `pixel-atelier` (`python -m pixel_atelier mcp --raiz <pasta do projeto>`), que só lê e grava dentro da raiz. Ele precisa estar instalado:
 
 ```
-pip install "pixel-atelier[mcp] @ git+https://github.com/guavovic/pixel-atelier"
+pip install "pixel-art-skills[mcp] @ git+https://github.com/guavovic/pixel-art-skills"
 ```
 
 Ferramentas (toda resposta é texto, nenhuma devolve imagem):
@@ -35,7 +35,7 @@ Sem o servidor ligado, o mesmo fluxo roda pela linha de comando `python -m pixel
 
 ## Fluxo de trabalho
 1. **Estilo**: um preset (`estilos`) ou um novo tirado de uma imagem de referência (`ref referencia.png --nome nome`). A imagem de referência é vista uma vez; depois só o nome. Para a técnica de uma época, `"geracao": 8`, `16`, `32` ou `"moderno"` na receita, com qualquer estilo (capítulo `geracoes`); o `revisar` usa os limites dela sozinho.
-2. **Receita**: camadas do fundo para a frente, com `forma`, `profundidade` e parâmetros. Formato na [seção Receita da referência](https://github.com/guavovic/pixel-atelier/blob/main/docs/referencia.md#receita).
+2. **Receita**: camadas do fundo para a frente, com `forma`, `profundidade` e parâmetros. Formato na [seção Receita da referência](https://github.com/guavovic/pixel-art-skills/blob/main/docs/referencia.md#receita).
 3. **Gerar**: `python -m pixel_atelier gerar receita.json --pasta saida`. Responde com o resumo (arquivos, cores, cada camada). Com `animacao` na receita, grava também o GIF, a folha de quadros e o JSON de tempo (capítulo `animacao`).
 4. **Revisar em texto**: `python -m pixel_atelier revisar saida/<cena>.png`. O laço se confere sozinho: o `gerar` grava no PNG se a cena tem laço e o `revisar` lê essa marca (`--laco`, ou `laco` na ferramenta MCP, só para forçar numa imagem sem a marca). Uma linha por regra (`ok`, `alerta`, `pulada`) com o número e onde. No GIF ou na folha de quadros, confere também o tempo por quadro e se o último quadro volta ao primeiro. Alerta: ajuste a receita e gere de novo. O capítulo de cada regra está no índice do guia.
 5. **Aprovação final**: só aqui abra o PNG (o ampliado, `<cena>-Nx.png`) e confira o que é `[heurística]`.
