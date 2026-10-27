@@ -142,6 +142,8 @@ TEMPO_MINIMO = 20  # ms; GIF com 0 ou 10 ms o navegador toca a 100 ms
 TEMPO_MAXIMO = 300  # ms; o quadro mais lento da tabela de tempo do guia (parado, respiração)
 DICA_CONTRASTE = ("aumente o contraste de valor da frente (clareie ou escureça a frente ou o contorno), "
                   "nunca escureça nem apague o fundo")
+DICA_CAMADAS = ("separe {nome} da camada de trás mexendo nela: afaste a `profundidade` dela ou troque o `papel`; "
+                "numa grade fechada (NES) as duas podem cair na mesma cor e o passo precisa ser maior (guia composicao)")
 
 VIZINHOS = ((1, 0), (-1, 0), (0, 1), (0, -1))
 LADOS = {(0, -1): "topo", (0, 1): "base", (-1, 0): "esquerda", (1, 0): "direita"}
@@ -542,9 +544,12 @@ def _contraste(pares: list[tuple[str, list[tuple[int, int, float]]]]) -> Checage
         partes.append(f"entre camadas mín {_medida(pior[1], CONTRASTE_CAMADAS)} em {pior[0]} (mín {CONTRASTE_CAMADAS:.2f})")
     if ruins:
         partes.append("baixo em " + ", ".join(f"{n} {_medida(m, CONTRASTE_CAMADAS)}" for n, m in ruins[:3]))
-    alerta = frente < CONTRASTE_FRENTE or bool(ruins)
-    if alerta:
+    frente_fraca = frente < CONTRASTE_FRENTE
+    if ruins:
+        partes.append(DICA_CAMADAS.format(nome=ruins[0][0]))
+    if frente_fraca:
         partes.append(DICA_CONTRASTE)
+    alerta = frente_fraca or bool(ruins)
     return Checagem("contraste", "alerta" if alerta else "ok", "; ".join(partes))
 
 

@@ -208,3 +208,15 @@ def test_linha_de_comando_revisar_com_geracao(tmp_path, capsys):
     _cena_com_cores(40).save(cena)
     main(["revisar", str(cena), "--geracao", "8"])
     assert "(limite 25)" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("numero", [61, 63])
+def test_pinheiro_da_cena_de_exemplo_sem_degrau_fora_do_2(numero):
+    receita = json.loads((EXEMPLOS / "snes-diurno.json").read_text(encoding="utf-8"))
+    receita.pop("tamanho")
+    receita["geracao"] = numero
+    for camada in receita["camadas"]:
+        camada["seed"] += 100
+    resultado = gerar(receita)
+    revisao = revisar(resultado.composto, camadas=[c.imagem for c in resultado.camadas], estilo=resultado.receita.estilo)
+    assert regra(revisao, "linha 2:1").estado == "ok"

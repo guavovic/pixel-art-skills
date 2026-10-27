@@ -16,6 +16,21 @@ TIPOS = ("pinheiro", "copa", "seca", "mista")
 PROPORCAO = {"pinheiro": 0.42, "copa": 0.72, "seca": 0.55}
 
 
+def _andar(y_baixo: float, alto: float, meia: int, topo: float, compasso: int) -> tuple[int, float]:
+    """Pé e ponta do andar. O lado íngreme cai em degraus iguais (2,2,2 e não 2,2,3): a altura vira
+    múltiplo da meia largura, e o pé desce até o compasso do primeiro andar para o degrau de um andar
+    não cair no meio do degrau do andar de baixo."""
+    y_baixo = round(y_baixo)
+    alto = min(alto, y_baixo - topo)
+    ingreme = alto >= 1.5 * meia
+    if not ingreme:
+        return y_baixo, y_baixo - alto
+    degrau = round(alto / meia)
+    y_baixo += (compasso - y_baixo) % degrau
+    degrau = max(1, min(degrau, int((y_baixo - topo) / meia)))
+    return y_baixo, y_baixo - degrau * meia
+
+
 def _pinheiro(tela: Tela, x: float, base: float, h: float, w: float, r: random.Random) -> list[Peca]:
     pecas = []
     tronco = tela.nova_mascara()
@@ -24,13 +39,13 @@ def _pinheiro(tela: Tela, x: float, base: float, h: float, w: float, r: random.R
     pecas.append(Peca(tronco, "tronco"))
     andares = max(3, min(8, int(h / 10)))
     altura_andar = h * 0.85 / andares
+    compasso = round(base - h * 0.12)
     for i in range(andares):
-        y_baixo = base - h * 0.12 - altura_andar * i
-        y_topo = max(base - h, y_baixo - altura_andar * 1.9)
-        meia = w * 0.5 * (1.0 - 0.78 * i / andares) * r.uniform(0.9, 1.08)
-        torto = r.uniform(-0.6, 0.6)
+        meia = max(1, round(w * 0.5 * (1.0 - 0.78 * i / andares) * r.uniform(0.9, 1.08)))
+        ponta = round(x + r.uniform(-0.6, 0.6))
+        y_baixo, y_topo = _andar(compasso - altura_andar * i, altura_andar * 1.9, meia, base - h, compasso)
         m = tela.nova_mascara()
-        tela.poligono(m, [(x - meia, y_baixo), (x + torto, y_topo), (x + meia, y_baixo), (x, y_baixo - 1)])
+        tela.poligono(m, [(ponta - meia, y_baixo), (ponta, y_topo), (ponta + meia, y_baixo), (x, y_baixo - 1)])
         pecas.append(Peca(m, "folha"))
     return pecas
 

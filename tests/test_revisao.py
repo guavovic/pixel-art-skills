@@ -119,6 +119,7 @@ def test_camadas_do_meio_sem_contraste_entre_si():
     frente = caixa(48, 48, cinza(250), (20, 4, 28, 20))
     c = regra(revisar(compor([fundo, meio, frente]), camadas=[fundo, meio, frente]), "contraste")
     assert c.estado == "alerta" and "baixo em 02" in c.detalhe
+    assert "separe 02 da camada de trás" in c.detalhe and DICA_CONTRASTE not in c.detalhe  # a frente já lê
 
 
 def test_sprite_sobre_fundo_na_posicao():
