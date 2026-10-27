@@ -11,7 +11,7 @@ Ateliê de pixel art para agentes. O motor (`pixel_atelier/`) guarda a técnica:
 3. Veja o que existe: `python -m pixel_atelier formas` e `python -m pixel_atelier estilos`.
 
 ## Fluxo de trabalho
-1. **Estilo**: um preset (`estilos`) ou um novo tirado de uma imagem de referência (`ref referencia.png --nome nome`). A imagem de referência é vista uma vez; depois só o nome.
+1. **Estilo**: um preset (`estilos`) ou um novo tirado de uma imagem de referência (`ref referencia.png --nome nome`). A imagem de referência é vista uma vez; depois só o nome. Para a técnica de uma época, `"geracao": 8`, `16`, `32` ou `"moderno"` na receita, com qualquer estilo (capítulo `geracoes`); o `revisar` usa os limites dela sozinho.
 2. **Receita**: camadas do fundo para a frente, com `forma`, `profundidade` e parâmetros. Formato em `docs/referencia.md`, seção Receita.
 3. **Gerar**: `python -m pixel_atelier gerar receita.json --pasta saida`. Responde com o resumo (arquivos, cores, cada camada). Com `animacao` na receita, grava também o GIF, a folha de quadros e o JSON de tempo (capítulo `animacao`).
 4. **Revisar em texto**: `python -m pixel_atelier revisar saida/<cena>.png`. O laço se confere sozinho: o `gerar` grava no PNG se a cena tem laço e o `revisar` lê essa marca (`--laco`, ou `laco` na ferramenta MCP, só para forçar numa imagem sem a marca). Uma linha por regra (`ok`, `alerta`, `pulada`) com o número e onde. No GIF ou na folha de quadros, confere também o tempo por quadro e se o último quadro volta ao primeiro. Alerta: ajuste a receita e gere de novo. O capítulo de cada regra está no índice do guia.

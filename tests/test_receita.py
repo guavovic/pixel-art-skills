@@ -206,7 +206,7 @@ def test_resumo_avisa_camada_vazia_e_camada_que_tapa_tudo():
     assert json.dumps(resultado.para_dicionario())  # pronto para JSON
 
 
-@pytest.mark.parametrize("nome", ["metroidvania-noturno", "snes-diurno"])
+@pytest.mark.parametrize("nome", ["metroidvania-noturno", "snes-diurno", "8-bits", "32-bits", "moderno"])
 def test_exemplos_reproduzem_montar_cena(nome):
     spec = importlib.util.spec_from_file_location("montar_cena", EXEMPLOS / "montar_cena.py")
     montar_cena = importlib.util.module_from_spec(spec)

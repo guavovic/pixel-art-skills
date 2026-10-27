@@ -26,8 +26,9 @@ A cena inteira cabe num JSON curto. Só `camadas` é obrigatório; as camadas v�
 | --- | --- | --- |
 | `cena` | `"cena"` | nome dos arquivos de saída |
 | `descricao` | `""` | texto livre |
-| `tamanho` | `[320, 180]` | largura e altura reais |
+| `tamanho` | `[320, 180]` | largura e altura reais; com geração, o da geração |
 | `estilo` | `"snes-diurno"` | preset, caminho de JSON ou dicionário de estilo (aceita `base`) |
+| `geracao` | a do estilo | técnica de uma época sobre o tema do estilo: `8`, `16`, `32`, `"moderno"` ou um número no meio (capítulo `geracoes` do guia) |
 | `laco` | `true` | laço horizontal; com ele a largura precisa ser múltipla de 8 |
 | `seed` | `0` | sorteia as camadas sem `seed` própria; camada com `seed` fica fixa |
 | `ampliar` | `1` | grava também o composto ampliado N vezes (de 1 a 16; o ampliado fica com no máximo 4096 por lado) |
@@ -161,10 +162,13 @@ O cliente MCP sobe o servidor com o PATH dele, então o `python` que ele acha pr
 python -m pixel_atelier revisar saida/vale.png [--estilo snes-diurno]     # acha as camadas em saida/vale/
 python -m pixel_atelier revisar heroi.png --fundo saida/vale.png [--posicao 40 120]
 python -m pixel_atelier revisar saida/vale.png --laco                    # força a emenda numa imagem sem a marca de laço
+python -m pixel_atelier revisar saida/vale.png --geracao 16              # limites de 16 bits numa imagem sem a marca de geração
 python -m pixel_atelier revisar saida/vale.gif                           # animação: tempo, volta do último quadro ao primeiro e o primeiro quadro
 ```
 
 O laço se confere sozinho: o `gerar` grava em cada PNG (composto, ampliado e camadas) um texto `pixel-atelier:laco` com `sim` ou `nao`, e o `revisar` confere a emenda quando a marca diz `sim`. `--laco` força a conferência numa imagem sem a marca (salva de novo por outro programa, por exemplo, que costuma descartar o texto do PNG); `laco=False` em Python, ou `false` na ferramenta MCP, pula.
+
+Com geração, cada PNG leva também `pixel-atelier:geracao` (8, 16, 32, 64...), e o `revisar` troca os limites pelos da época: cores da cena, cores por camada e a janela e as cópias da composição repetida. `--geracao`, `geracao=` em Python ou `geracao` na ferramenta MCP força numa imagem sem a marca. Os números estão no capítulo `geracoes` do guia.
 
 O ampliado também leva `pixel-atelier:escala` (o N do `ampliar`), e o `revisar` volta ao tamanho real por ela ou pelo `-Nx` do nome, em qualquer tamanho. Sem nenhuma das duas, a imagem só passa por ampliada com troca de cor nos dois eixos, todas no passo do bloco, e trocas bastantes para não ser acaso (arte chapada, com poucas trocas, é lida como veio).
 
@@ -192,15 +196,16 @@ Com problema, a linha diz o quanto e onde, por exemplo `alerta legibilidade: fre
 
 | Regra | Alerta quando |
 | --- | --- |
-| cores | mais de 16 num sprite ou 64 numa cena; com `--estilo`, cor fora da paleta |
+| cores | mais de 16 num sprite ou 64 numa cena (com geração: 25, 121 ou 256); com `--estilo`, cor fora da paleta |
+| cores por camada | só com geração e camadas: camada com mais cores que a geração deixa (13 no 8 bits, 15 no 16, 255 no 32; o moderno não tem limite) |
 | contraste | mediana da diferença de valor na borda abaixo de 0,05 entre camadas ou 0,10 da frente contra o fundo |
 | legibilidade | a frente some (diferença < 0,05) em mais de 25% da borda, ou o fundo tem faixa de valor < 0,20 (fundo apagado: destaque por contraste, não escurecendo o fundo); sprite sozinho com faixa < 0,30 |
-| laço | cena marcada com laço pelo `gerar` (ou com `--laco`): a emenda (coluna da direita contra a da esquerda) passa de 3x a média entre colunas vizinhas e da maior delas, no composto ou numa camada |
+| laço | cena marcada com laço pelo `gerar` (ou com `--laco`): a emenda (coluna da direita contra a da esquerda) passa de 3x a média entre colunas vizinhas e de 1,05x a maior delas, no composto ou numa camada |
 | pixel solto | mais de 0,5% dos pixels (pontilhado não conta) |
 | pillow shading | borda 0,06+ mais escura que o miolo nos 4 lados por igual |
 | serrilhado | mais de 6% dos degraus da silhueta fora do ritmo (3,1,3 ou 1,3,1) |
 | escala | 2+ ladrilhos de 16x16 com bloco de pixel diferente do resto |
-| composição repetida | trecho de 12x12 com detalhe igual 3+ vezes |
+| composição repetida | trecho de 12x12 com detalhe igual 3+ vezes (com geração: 5+ vezes até 16 bits; janela de 24x24 no moderno) |
 | matiz da rampa | com `--estilo`: rampa do estilo usada na imagem que muda menos de 3° de matiz do escuro ao claro (só cores com saturação 0,20+; rampa toda abaixo de valor 0,25 fica de fora) |
 | contorno preto | todos os contornos (borda com 85%+ numa cor só, diferente do miolo) em preto puro, canal até 8 |
 | anti-alias | meio-tom (alfa parcial, ou valor entre o de dentro e o de trás) em 80%+ da borda em cada um dos 4 lados |
@@ -276,7 +281,7 @@ O que existe no pacote:
 
 - **Técnicas** (`pixel_atelier/`): `cor.py` (rampas com mudança de matiz, mistura, quantização para a paleta), `estilo.py` (o `Estilo`: paleta, rampas por papel, atmosfera, luz, jeito de sombrear), `pontilhado.py` (Bayer 4x4), `tela.py` (tela com laço horizontal), `pintura.py` (volume por faixas de luz e sombra, luz de contorno, contorno, limpeza de pixel solto) e `imagem.py` (`compor`, `ampliar` por vizinho mais próximo, `ladrilhar`).
 - **Formas** (`pixel_atelier/formas/`): `ceu`, `nuvem`, `terreno`, `arvore`, `rocha`, `cristal`, `nevoa`, `raios`. Cada uma devolve uma camada RGBA no tamanho real de pixel, só com cores da paleta e alfa 0 ou 255.
-- **Estilos** (`pixel_atelier/estilos/*.json`): `metroidvania-noturno`, `snes-diurno`, `game-boy`.
+- **Estilos** (`pixel_atelier/estilos/*.json`): `metroidvania-noturno`, `snes-diurno`, `game-boy` e os de geração `8-bits`, `16-bits`, `32-bits` e `moderno` (`geracao.py` guarda os números de cada época).
 - **Receitas**: `receita.py` valida antes de desenhar, com todos os erros de uma vez e sugestão de nome parecido; `gerador.py` desenha e devolve o resumo em texto.
-- **Exemplos**: `exemplos/montar_cena.py` monta a mesma cena nos três estilos; `exemplos/*.json` são as mesmas cenas em receita.
+- **Exemplos**: `exemplos/montar_cena.py` monta a mesma cena nos três estilos e nas quatro gerações; `exemplos/*.json` são as mesmas cenas em receita.
 - **GIFs do README**: `python scripts/gifs_readme.py` regrava os de `docs/`.
