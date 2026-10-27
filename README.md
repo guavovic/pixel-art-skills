@@ -6,26 +6,26 @@
 </p>
 
 <p align="center">
-  <a href="docs/referencia.md">Referência</a>
+  <a href="https://github.com/guavovic/pixel-art-skills/blob/main/docs/referencia.md">Referência</a>
   &nbsp;•&nbsp;
-  <a href="pixel_atelier/guia/indice.md">Guia de pixel art</a>
+  <a href="https://github.com/guavovic/pixel-art-skills/blob/main/pixel_atelier/guia/indice.md">Guia de pixel art</a>
   &nbsp;•&nbsp;
-  <a href="embalagens/README.md">Embalagens</a>
+  <a href="https://github.com/guavovic/pixel-art-skills/blob/main/embalagens/README.md">Embalagens</a>
   &nbsp;•&nbsp;
-  <a href="AGENTS.md">Para agentes</a>
+  <a href="https://github.com/guavovic/pixel-art-skills/blob/main/AGENTS.md">Para agentes</a>
 </p>
 
 Ateliê de pixel art para agentes de IA. O agente escreve uma receita JSON curta e lê as respostas em texto; a técnica (paleta, rampas, luz, pontilhado, laço sem emenda) fica guardada no motor, e a mesma receita com a mesma seed dá sempre os mesmos pixels.
 
-<img src="docs/parallax.gif" alt="Cena diurna em camadas num laço sem emenda, com cada plano andando na sua velocidade" width="100%">
+<img src="https://raw.githubusercontent.com/guavovic/pixel-art-skills/main/docs/parallax.gif" alt="Cena diurna em camadas num laço sem emenda, com cada plano andando na sua velocidade" width="100%">
 
-<img src="docs/estilos.gif" alt="A mesma receita nos estilos metroidvania-noturno, snes-diurno e game-boy" width="100%">
+<img src="https://raw.githubusercontent.com/guavovic/pixel-art-skills/main/docs/estilos.gif" alt="A mesma receita nos estilos metroidvania-noturno, snes-diurno e game-boy" width="100%">
 
-<img src="docs/geracoes.gif" alt="A cena de exemplo em 8, 16 e 32 bits e moderna, cada uma na resolução da época" width="100%">
+<img src="https://raw.githubusercontent.com/guavovic/pixel-art-skills/main/docs/geracoes.gif" alt="A cena de exemplo em 8, 16 e 32 bits e moderna, cada uma na resolução da época" width="100%">
 
-<img src="docs/revisar.gif" alt="Antes e depois do revisar: alerta de contraste com a frente apagada e, depois do ajuste na receita, nenhum alerta" width="100%">
+<img src="https://raw.githubusercontent.com/guavovic/pixel-art-skills/main/docs/revisar.gif" alt="Antes e depois do revisar: alerta de contraste com a frente apagada e, depois do ajuste na receita, nenhum alerta" width="100%">
 
-<img src="docs/referencia.gif" alt="Uma imagem de referência vira paleta e rampas pelo ref, e a receita de exemplo sai no estilo novo" width="100%">
+<img src="https://raw.githubusercontent.com/guavovic/pixel-art-skills/main/docs/referencia.gif" alt="Uma imagem de referência vira paleta e rampas pelo ref, e a receita de exemplo sai no estilo novo" width="100%">
 
 ## Destaques
 
@@ -60,7 +60,7 @@ No Claude Code, o plugin entra por dentro de uma sessão:
 | Cursor | regra em `.cursor/rules/` e servidor em `.cursor/mcp.json` | formato validado pela documentação e servidor testado com cliente MCP; teste de ponta a ponta pendente |
 | GitHub Copilot | `copilot-instructions.md` e servidor em `mcp.json` (VS Code e Copilot CLI) | formato validado pela documentação e servidor testado com cliente MCP; teste de ponta a ponta pendente |
 
-Onde colocar cada embalagem está em [`embalagens/README.md`](embalagens/README.md). Outro cliente MCP usa a configuração `mcpServers` da [referência](docs/referencia.md#servidor-mcp).
+Onde colocar cada embalagem está em [`embalagens/README.md`](https://github.com/guavovic/pixel-art-skills/blob/main/embalagens/README.md). Outro cliente MCP usa a configuração `mcpServers` da [referência](https://github.com/guavovic/pixel-art-skills/blob/main/docs/referencia.md#servidor-mcp).
 
 ## Como foi feito
 

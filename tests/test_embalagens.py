@@ -115,3 +115,39 @@ def test_fonte_sem_secao_para_o_script(tmp_path):
     (tmp_path / "pixel_atelier" / "__main__.py").unlink()  # sem ele, python -m pixel_atelier não sobe
     with pytest.raises(embalar.ErroDeFonte, match="__main__.py"):
         embalar.montar(tmp_path)
+
+
+def test_instalar_pronto_para_o_pypi():
+    f = embalar.fonte()
+    assert embalar.instalar(f, no_pypi=False) == f'pip install "pixel-art-skills[mcp] @ git+{embalar.REPO}"'
+    assert embalar.instalar(f, no_pypi=True) == 'pip install "pixel-art-skills[mcp]"'
+
+
+def test_docs_com_o_mesmo_comando_de_instalar_das_embalagens():
+    comando = embalar.instalar(embalar.fonte())
+    for doc in ("README.md", "docs/referencia.md"):
+        assert comando in (RAIZ / doc).read_text(encoding="utf-8"), f"{doc} sem `{comando}`"
+
+
+def test_readme_sem_link_relativo_para_aparecer_no_pypi():
+    import re
+
+    readme = (RAIZ / "README.md").read_text(encoding="utf-8")
+    relativos = re.findall(r'(?:src|href)="(?!https?:)[^"]+"|\]\((?!https?:|#)[^)]+\)', readme)
+    assert not relativos, f"o PyPI não resolve link relativo do README: {relativos}"
+
+
+def test_metadados_do_pypi_no_pyproject():
+    dados = tomllib.loads((RAIZ / "pyproject.toml").read_text(encoding="utf-8"))["project"]
+    assert dados["license"] == "MIT" and dados["license-files"] == ["LICENSE"]
+    assert dados["readme"] == "README.md" and dados["keywords"] and dados["authors"]
+    assert {"Homepage", "Repository", "Issues"} <= set(dados["urls"])
+    assert not any(c.startswith("License ::") for c in dados["classifiers"])  # a licença vai só na expressão SPDX
+
+
+def test_publicacao_so_em_release_publicada():
+    fluxo = (RAIZ / ".github" / "workflows" / "publicar.yml").read_text(encoding="utf-8")
+    gatilho = fluxo.split("\non:\n", 1)[1].split("\njobs:", 1)[0]
+    assert "release:" in gatilho and "types: [published]" in gatilho
+    assert "push" not in gatilho and "pull_request" not in gatilho
+    assert "id-token: write" in fluxo and "pypa/gh-action-pypi-publish@release/v1" in fluxo
