@@ -165,3 +165,13 @@ def cores_usadas(imagem: Image.Image) -> set[RGB]:
     rgba = imagem.convert("RGBA")
     contagem = rgba.getcolors(maxcolors=rgba.width * rgba.height) or []
     return {(r, g, b) for _, (r, g, b, a) in contagem if a > 0}
+
+
+def limitar_cores(imagem: Image.Image, limite: int) -> Image.Image:
+    """Fica com as `limite` cores mais usadas; as outras viram a mais parecida delas."""
+    rgba = imagem.convert("RGBA")
+    contagem = rgba.getcolors(maxcolors=rgba.width * rgba.height) or []
+    visiveis = sorted(((n, c[:3]) for n, c in contagem if c[3] > 0), reverse=True)
+    if len(visiveis) <= limite:
+        return imagem
+    return quantizar(rgba, [c for _, c in visiveis[:limite]])

@@ -1,0 +1,13 @@
+{
+  "nome": "16-bits",
+  "descricao": "Técnica de 16 bits sobre o tema snes-diurno: cor de 15 bits, 5 tons por rampa, faixas de luz e sombra, 15 cores por camada, 256x224.",
+  "base": "snes-diurno",
+  "geracao": 16,
+  "rampas": {
+    "nuvem": [
+      "#8c9cd8",
+      "#c8d8f0",
+      "#ffffff"
+    ]
+  }
+}

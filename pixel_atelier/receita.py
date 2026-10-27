@@ -8,6 +8,8 @@ Formato (só `camadas` é obrigatório; o resto tem padrão):
       "tamanho": [320, 180],           # largura e altura reais, em pixels
       "estilo": "snes-diurno",         # nome de preset, caminho de JSON ou dicionário de estilo;
                                        # {"base": "snes-diurno", "contorno": true} parte do preset
+      "geracao": 16,                   # opcional: técnica da época (8, 12, 16, 32, "moderno") sobre o tema
+                                       # do estilo; sem tamanho, usa a resolução da época
       "laco": true,                    # laço horizontal sem emenda (largura múltipla de 8)
       "seed": 0,                       # sorteia as camadas que não fixam a própria seed
       "ampliar": 1,                    # grava também o composto ampliado N vezes, para olhar
@@ -37,7 +39,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from .estilo import Estilo, carregar_estilo, PAPEIS
+from .estilo import Estilo, carregar_estilo, dados_do_estilo, PAPEIS
 from .formas import FORMAS
 from .formas._base import semente
 from .formas.arvore import TIPOS as TIPOS_ARVORE
@@ -45,7 +47,7 @@ from .formas.ceu import ASTROS
 from .formas.nuvem import TIPOS as TIPOS_NUVEM
 from .formas.terreno import SUPERFICIES
 
-CAMPOS = ("cena", "descricao", "tamanho", "estilo", "laco", "seed", "ampliar", "saida", "animacao", "camadas")
+CAMPOS = ("cena", "descricao", "tamanho", "geracao", "estilo", "laco", "seed", "ampliar", "saida", "animacao", "camadas")
 SAIDAS = ("tudo", "composto", "camadas")
 COMUNS = ("seed", "laco", "deslocamento")  # parâmetros que toda forma aceita e a receita resolve
 TAMANHO_MAXIMO = 4096
@@ -130,6 +132,7 @@ def descrever_campos() -> str:
     partes[list(PADRAO).index("saida")] += " (" + "|".join(json.dumps(s) for s in SAIDAS) + ")"
     animacao = json.dumps(ANIMACAO_PADRAO)
     return ("receita: " + ", ".join(partes) + ", descricao (texto livre), "
+            'geracao (opcional: 8, 12, 16, 32, "moderno"; técnica da época sobre o tema do estilo), '
             f"animacao={animacao} (opcional: grava GIF, folha de quadros e JSON de tempo), "
             'camadas=[{"forma": ..., "nome": ..., parâmetros}] (obrigatório, do fundo para a frente)')
 
@@ -227,6 +230,15 @@ def validar_receita(fonte: "str | Path | dict[str, Any]") -> Receita:
     if not isinstance(cena, str) or not NOME_VALIDO.match(cena):
         erros.append(f"cena deve ser texto minúsculo com hífen ou sublinhado (vira nome de arquivo), veio {cena!r}")
 
+    estilo = None
+    try:
+        estilo = _carregar_com_geracao(r["estilo"], dados.get("geracao"))
+    except (KeyError, ValueError, TypeError) as erro:
+        erros.append(f"estilo: {erro.args[0] if erro.args else erro}")
+    sem_tamanho_com_geracao = "tamanho" not in dados and estilo is not None and estilo.geracao is not None
+    if sem_tamanho_com_geracao:
+        r["tamanho"] = list(estilo.geracao.tamanho)
+
     largura = altura = 0
     tamanho = r["tamanho"]
     if (isinstance(tamanho, (list, tuple)) and len(tamanho) == 2
@@ -234,12 +246,6 @@ def validar_receita(fonte: "str | Path | dict[str, Any]") -> Receita:
         largura, altura = tamanho
     else:
         erros.append(f"tamanho deve ser [largura, altura] com inteiros de 1 a {TAMANHO_MAXIMO}, veio {tamanho!r}")
-
-    estilo = None
-    try:
-        estilo = carregar_estilo(r["estilo"])
-    except (KeyError, ValueError, TypeError) as erro:
-        erros.append(f"estilo: {erro.args[0] if erro.args else erro}")
 
     for campo, tipo, nome_tipo in (("laco", bool, "true ou false"), ("seed", int, "número inteiro")):
         if not isinstance(r[campo], tipo) or (tipo is int and isinstance(r[campo], bool)):
@@ -278,6 +284,13 @@ def validar_receita(fonte: "str | Path | dict[str, Any]") -> Receita:
     return Receita(cena=cena, largura=largura, altura=altura, estilo=estilo, laco=r["laco"], seed=r["seed"],
                    ampliar=ampliar, saida=r["saida"], camadas=camadas, descricao=r.get("descricao", ""),
                    animacao=animacao, original=dados)
+
+
+def _carregar_com_geracao(estilo: Any, geracao: Any) -> Estilo:
+    """O estilo da receita; com `geracao`, o tema dele na técnica da época pedida."""
+    if geracao is None:
+        return carregar_estilo(estilo)
+    return carregar_estilo({**dados_do_estilo(estilo), "geracao": geracao})
 
 
 def colunas_da_folha(quadros: int, largura: int) -> int:

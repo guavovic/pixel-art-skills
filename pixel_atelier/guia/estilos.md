@@ -21,6 +21,9 @@ Um estilo é o conjunto de limites: resolução, cores, contorno e jeito de somb
 - Personagem pequeno (20 a 32 px) com contorno e o maior contraste da tela.
 - Preset: `metroidvania-noturno` (sombreado chapado, sem contorno no cenário, luz de contorno ciano).
 
+## Por geração
+- Presets `8-bits`, `16-bits`, `32-bits` e `moderno`: o tema do `snes-diurno` (com a sombra da nuvem mais fria) e a técnica de cada época. `"geracao"` num estilo ou na receita troca só a técnica. Ver o capítulo `geracoes`.
+
 ## Estilo novo
 - A partir de um preset: `{"base": "snes-diurno", "contorno": false, "sombreamento": "chapado"}` na receita.
 - A partir de uma imagem: `python -m pixel_atelier ref referencia.png --nome nome`. Guarda paleta e rampas, não o desenho.

@@ -4,7 +4,8 @@ A receita é uma só: as camadas, as seeds e os parâmetros não mudam de um est
 Só o céu troca de astro (lua à noite, sol de dia), o brilho do cristal some de dia, as montanhas
 da noite ficam mais longe (para separar dos pinheiros) e a noite ganha duas camadas a mais na
 frente: névoa baixa e raios de luz. Ajuste vale para a forma ou, quando a camada tem nome (terceiro
-item), só para ela.
+item), só para ela. Os presets de geração (8-bits, 16-bits, 32-bits, moderno) usam os ajustes do
+snes-diurno e o tamanho da geração.
 
 Uso: python exemplos/montar_cena.py [estilo ...]
 """
@@ -55,17 +56,22 @@ AJUSTES = {
         "ceu": dict(astro="sol", posicao=(0.78, 0.2), halo=0.0),
     },
 }
+GERACOES = ("8-bits", "16-bits", "32-bits", "moderno")
+AJUSTES.update({nome: AJUSTES["snes-diurno"] for nome in GERACOES})
 
 
 def montar(nome_estilo: str):
     estilo = carregar_estilo(nome_estilo)
+    largura, altura = LARGURA, ALTURA
+    if estilo.geracao is not None:
+        largura, altura = estilo.geracao.tamanho
     ajustes = AJUSTES.get(nome_estilo, {})
     camadas = []
     for forma, parametros, *nome in RECEITA:
         ajuste = ajustes.get(nome[0] if nome else forma, {})
-        camadas.append(desenhar(forma, estilo, LARGURA, ALTURA, **{**parametros, **ajuste}))
+        camadas.append(desenhar(forma, estilo, largura, altura, **{**parametros, **ajuste}))
     for forma, parametros in ajustes.get("extras", []):
-        camadas.append(desenhar(forma, estilo, LARGURA, ALTURA, **parametros))
+        camadas.append(desenhar(forma, estilo, largura, altura, **parametros))
     return compor(camadas)
 
 
@@ -73,8 +79,11 @@ def main(estilos: list[str]) -> None:
     for nome in estilos:
         inicio = time.perf_counter()
         cena = montar(nome)
+        fator = 3
+        if cena.width > LARGURA:
+            fator = 2
         cena.save(PASTA / f"{nome}.png")
-        ampliar(cena, 3).save(PASTA / f"{nome}-3x.png")
+        ampliar(cena, fator).save(PASTA / f"{nome}-{fator}x.png")
         print(f"{nome}: {time.perf_counter() - inicio:.1f} s")
 
 

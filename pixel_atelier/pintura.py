@@ -6,7 +6,11 @@ Por peça, do fundo para a frente:
 - `pontilhado`: as mesmas faixas com uma segunda faixa em xadrez, a transição do Game Boy;
 - `chapado`: só o tom médio, a silhueta do metroidvania;
 - luz de contorno: 1 pixel claro na borda voltada para a luz, fora das partes finas;
-- contorno: 1 pixel escuro em volta de tudo, quando o estilo pede.
+- contorno: 1 pixel escuro em volta de tudo, quando o estilo pede; com selout, cada trecho do
+  contorno sai no tom mais escuro da peça que ele cerca.
+
+Com geração (`estilo.geracao`), `degraus` põe mais de um tom em cada faixa (o mais forte na borda)
+e `textura` salpica manchas do tom vizinho dentro das peças, presas ao mundo (andam com o laço).
 
 A luz e a sombra só aparecem do lado de cada uma, nunca em volta toda (isso seria pillow shading).
 """
@@ -20,6 +24,7 @@ from .cor import RGB, misturar, quantizar
 from .estilo import Estilo
 from .imagem import iguais, vizinho
 from .pontilhado import xadrez
+from .ruido import hash01
 from .tela import Peca, Tela
 
 
@@ -58,7 +63,12 @@ def pintar(tela: Tela, pecas: Iterable[Peca], estilo: Estilo, profundidade: floa
     cor_luz = estilo.cor_da_luz(profundidade)
     uniao = tela.nova_mascara()
 
-    margem = 2 * faixa + 3  # alcance das faixas e da abertura morfológica, com folga
+    margem = 2 * faixa * estilo.degraus + 3  # alcance das faixas e da abertura morfológica, com folga
+    manchas, manchas_macias = None, None
+    if estilo.textura:
+        manchas = _manchas(tela, estilo.textura)
+        manchas_macias = _manchas(tela, estilo.textura / 2)
+    tons_do_selout: list[tuple[Image.Image, RGB, RGB]] = []
     for peca in pecas:
         caixa = _caixa(peca.mascara, margem, tela)
         if caixa is None:
@@ -68,12 +78,19 @@ def pintar(tela: Tela, pecas: Iterable[Peca], estilo: Estilo, profundidade: floa
         rampa = estilo.rampa(peca.papel, profundidade)
         i = _indice(estilo, rampa, peca.tom)
         imagem.paste(rampa[i] + (255,), caixa, mask=m)
+        if estilo.selout:
+            tons_do_selout.append((peca.mascara, rampa[0], rampa[i]))
         if peca.liso:
             continue
+        if manchas is not None:
+            da_peca = manchas_macias if peca.papel in PAPEIS_MACIOS else manchas
+            escuras, claras = (ImageChops.multiply(m, mancha.crop(caixa)) for mancha in da_peca)
+            imagem.paste(rampa[max(0, i - 1)] + (255,), caixa, mask=escuras)
+            imagem.paste(rampa[min(len(rampa) - 1, i + 1)] + (255,), caixa, mask=claras)
         if estilo.sombreamento in ("faixas", "pontilhado"):
             escura, clara = rampa[max(0, i - 1)], rampa[min(len(rampa) - 1, i + 1)]
-            banda_sombra = tela.faixa(m, sombra, faixa)
-            banda_luz = tela.faixa(m, luz, faixa)
+            banda_sombra = tela.faixa(m, sombra, faixa * estilo.degraus)
+            banda_luz = tela.faixa(m, luz, faixa * estilo.degraus)
             if tabuleiro is not None:
                 casas = tabuleiro.crop(caixa)
                 sombra2 = ImageChops.multiply(ImageChops.subtract(tela.faixa(m, sombra, faixa * 2), banda_sombra), casas)
@@ -82,6 +99,11 @@ def pintar(tela: Tela, pecas: Iterable[Peca], estilo: Estilo, profundidade: floa
                 imagem.paste(clara + (255,), caixa, mask=luz2)
             imagem.paste(escura + (255,), caixa, mask=banda_sombra)
             imagem.paste(clara + (255,), caixa, mask=banda_luz)
+            for degrau in range(2, estilo.degraus + 1):
+                largura = faixa * (estilo.degraus - degrau + 1)
+                clara = rampa[min(len(rampa) - 1, i + degrau)]
+                imagem.paste(rampa[max(0, i - degrau)] + (255,), caixa, mask=tela.faixa(m, sombra, largura))
+                imagem.paste(clara + (255,), caixa, mask=tela.faixa(m, luz, largura))
             topo = clara
         else:
             topo = rampa[i]
@@ -93,10 +115,67 @@ def pintar(tela: Tela, pecas: Iterable[Peca], estilo: Estilo, profundidade: floa
     if estilo.contorno and uniao.getbbox() is not None:
         anel = ImageChops.subtract(tela.dilatar(uniao, cruz=True), uniao)
         imagem.paste(estilo.cor(estilo.contorno_cor, profundidade) + (255,), mask=anel)
+        for mascara, escuro, medio in tons_do_selout:
+            volta = tela.dilatar(mascara, cruz=True)
+            imagem.paste(escuro + (255,), mask=ImageChops.multiply(anel, volta))
+            imagem.paste(medio + (255,), mask=ImageChops.multiply(anel, tela.faixa(volta, luz, 1)))
 
     if estilo.sombreamento != "pontilhado":
         imagem = limpar_soltos(imagem, tela.laco)
     return quantizar(imagem, estilo.paleta)
+
+
+PAPEIS_MACIOS = {"nuvem", "nevoa"}  # textura pela metade: mancha forte em nuvem vira camuflagem
+_CAMPOS: dict[tuple, Image.Image] = {}
+
+
+def _manchas(tela: Tela, textura: float) -> tuple[Image.Image, Image.Image]:
+    """Máscaras das manchas escuras e claras da textura: a ponta alta do campo vira mancha escura e a
+    baixa, clara. `textura` 1 cobre perto de um quarto da peça."""
+    campo = _campo_da_textura(tela)
+    corte = round(255 * 0.3 * textura)
+    escuras = campo.point(lambda v: 255 if v > 255 - corte else 0)
+    claras = campo.point(lambda v: 255 if v < corte else 0)
+    return escuras, claras
+
+
+def _campo_da_textura(tela: Tela) -> Image.Image:
+    """Ruído de valor em duas escalas (casas de 4 e 2 pixels, que dividem a largura do laço), de 0 a
+    255, preso ao mundo: anda com o deslocamento e dá a volta com o laço."""
+    chave = (tela.largura, tela.altura, tela.laco, tela.deslocamento)
+    if chave not in _CAMPOS:
+        grossas, finas = (_ruido_em_casas(tela, casa) for casa in (4, 2))
+        campo = Image.new("L", tela.tamanho)
+        campo.putdata([round(255 * (0.65 * a + 0.35 * b)) for a, b in zip(grossas, finas)])
+        _CAMPOS[chave] = campo
+    return _CAMPOS[chave]
+
+
+def _ruido_em_casas(tela: Tela, casa: int) -> list[float]:
+    """Ruído de valor com um sorteio por canto de casa e mistura linear dentro dela, linha por linha."""
+    colunas = max(1, tela.largura // casa)
+
+    def coluna(c: int) -> int:
+        if tela.laco:
+            return c % colunas
+        return c
+
+    xs = []
+    for x in range(tela.largura):
+        mx = tela.no_mundo(x)
+        xs.append((coluna(mx // casa), coluna(mx // casa + 1), (mx % casa) / casa))
+    usadas = {c for c0, c1, _ in xs for c in (c0, c1)}
+    valores: list[float] = []
+    for y in range(tela.altura):
+        cy, fy = divmod(y, casa)
+        ty = fy / casa
+        cima = {c: hash01(c, cy, casa) for c in usadas}
+        baixo = {c: hash01(c, cy + 1, casa) for c in usadas}
+        for c0, c1, tx in xs:
+            a = cima[c0] + (cima[c1] - cima[c0]) * tx
+            b = baixo[c0] + (baixo[c1] - baixo[c0]) * tx
+            valores.append(a + (b - a) * ty)
+    return valores
 
 
 def _caixa(mascara: Image.Image, margem: int, tela: Tela) -> tuple[int, int, int, int] | None:

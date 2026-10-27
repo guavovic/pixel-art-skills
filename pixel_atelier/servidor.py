@@ -89,6 +89,8 @@ def criar_servidor(raiz: str | Path | None = None) -> MCPServer:
         estilo: Annotated[str | None, Field(description="preset ou .json para conferir a paleta")] = None,
         laco: Annotated[bool | None, Field(description="força (true) ou pula (false) a conferência da emenda; "
                                                        "sem ele, vale a marca de laço que o gerar grava no PNG")] = None,
+        geracao: Annotated[int | str | None, Field(description="limites de uma geração (8, 16, 32, \"moderno\"); "
+                                                              "sem ela, vale a do estilo ou a marca do PNG")] = None,
     ) -> str:
         """Confere a imagem pelas regras de pixel art e responde com o relatório: ok ou alerta por regra."""
         arquivo = dentro_da_raiz(raiz, imagem, "imagem")
@@ -99,7 +101,7 @@ def criar_servidor(raiz: str | Path | None = None) -> MCPServer:
                 return revisar(arquivo, camadas=dentro_da_raiz(raiz, camadas, "camadas") if camadas else None,
                                fundo=dentro_da_raiz(raiz, fundo, "fundo") if fundo else None,
                                posicao=tuple(posicao) if posicao else None, estilo=estilo,
-                               laco=laco).resumo()
+                               laco=laco, geracao=geracao).resumo()
         except (OSError, KeyError, ValueError) as erro:
             raise ToolError(f"revisão não feita: {erro.args[0] if erro.args else erro}") from None
 
