@@ -66,6 +66,11 @@ olhar valor e não matiz é o teste da imagem em escala de cinza.
   ao lado): cada quadro dura de 20 a 300 ms. Abaixo de 20 ms o navegador troca o tempo do GIF por
   100 ms; acima de 300 ms (o quadro mais lento da tabela do guia) o movimento vira sequência de
   fotos. Imagem parada pula. A revisão das outras regras usa o primeiro quadro.
+- laço dos quadros (heurística, animação que repete): com os quadros reduzidos a 32 px de largura,
+  a diferença média por pixel do último quadro para o primeiro contra a dos pares de quadros
+  seguidos. Alerta quando passa de 1,1 vez a maior: num laço certo a volta é só mais um passo;
+  numa animação que não fecha (pan que não volta, voltas quebradas) ela é um pulo. GIF que toca
+  uma vez pula; imagem parada não mostra a linha.
 
 Cada limiar está explicado no capítulo da regra no guia (`pixel_atelier/guia/`, índice em
 `indice.md`); mudou aqui, muda lá.
@@ -84,7 +89,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Iterable, Sequence
 
-from PIL import Image, ImageChops
+from PIL import Image, ImageChops, ImageStat
 
 from .cor import QUASE_IGUAL, distancia2, luminancia, rgb_para_hex
 from .estilo import Estilo, carregar_estilo
@@ -114,6 +119,8 @@ JANELA_VARIADA = 6  # linhas e colunas diferentes que o trecho precisa ter
 COPIAS = 3
 ATMOSFERA = 0.5  # camada com mais pixels de borda do que isso (fração) é névoa ou raio pontilhado
 LACO_EMENDA = 3  # emenda acima disso vezes a média entre colunas vizinhas (e acima da maior) é laço quebrado
+LACO_QUADROS = 1.1  # do último quadro para o primeiro acima disso vezes a maior troca entre quadros seguidos: pulo (o laço certo chega a 1,03)
+LACO_LADO = 32  # px; a conta do laço roda nos quadros reduzidos a essa largura, onde o passo grande não satura
 RAMPA_MATIZ = 3  # graus do escuro ao claro: abaixo disso é só o arredondamento do RGB, a rampa só muda o brilho
 RAMPA_SATURACAO = 0.2  # cor menos saturada que isso é quase cinza: o matiz dela não conta
 RAMPA_ESCURA = 0.25  # rampa toda abaixo desse valor (silhueta noturna): no escuro o matiz quase não aparece
@@ -207,32 +214,73 @@ def _ler_camadas(camadas: "str | Path | Sequence[str | Path | Image.Image]") -> 
     return lidas
 
 
-def _animacao(arquivo: Path) -> tuple[Image.Image, list[int], Path] | None:
-    """Primeiro quadro, duração de cada quadro e o PNG parado da cena (onde achar as camadas).
+@dataclass
+class _Animada:
+    primeiro: Image.Image
+    duracoes: list[int]
+    parada: Path  # o PNG parado da cena, onde achar as camadas
+    diferencas: list[float] | None  # entre cada quadro e o seguinte, a última do último para o primeiro; None se toca uma vez
 
-    Vale para o GIF com mais de um quadro e para a folha com o JSON de tempo ao lado; None para o resto.
-    """
+
+def _diferenca(a: Image.Image, b: Image.Image) -> float:
+    """Diferença média por pixel e canal, de 0 a 1; a cor do pixel transparente não conta."""
+    return sum(ImageStat.Stat(ImageChops.difference(a, b)).mean) / (4 * 255)
+
+
+def _reduzido(quadro: Image.Image) -> Image.Image:
+    zerado = Image.new("RGBA", quadro.size, (0, 0, 0, 0))
+    zerado.paste(quadro, mask=quadro.getchannel("A"))
+    largura = min(LACO_LADO, quadro.width)
+    altura = max(1, round(largura * quadro.height / quadro.width))
+    return zerado.resize((largura, altura), Image.BOX)
+
+
+def _diferencas(quadros: Iterable[Image.Image]) -> list[float]:
+    diferencas, primeiro, anterior = [], None, None
+    for quadro in quadros:
+        quadro = _reduzido(quadro.convert("RGBA"))
+        if anterior is None:
+            primeiro = quadro
+        else:
+            diferencas.append(_diferenca(anterior, quadro))
+        anterior = quadro
+    diferencas.append(_diferenca(anterior, primeiro))
+    return diferencas
+
+
+def _quadros_do_gif(gif: Image.Image) -> Iterable[Image.Image]:
+    for i in range(gif.n_frames):
+        gif.seek(i)
+        yield gif
+
+
+def _animacao(arquivo: Path) -> _Animada | None:
+    """Vale para o GIF com mais de um quadro e para a folha com o JSON de tempo ao lado; None para o resto."""
     if arquivo.suffix.lower() == ".gif":
         with Image.open(arquivo) as gif:
             if getattr(gif, "n_frames", 1) < 2:
                 return None
+            toca_uma_vez = "loop" not in gif.info
             primeiro = gif.convert("RGBA")
             duracoes = []
-            for i in range(gif.n_frames):
-                gif.seek(i)
-                duracoes.append(int(gif.info.get("duration", 0)))
-        return primeiro, duracoes, arquivo
+            for quadro in _quadros_do_gif(gif):
+                duracoes.append(int(quadro.info.get("duration", 0)))
+            diferencas = None if toca_uma_vez else _diferencas(_quadros_do_gif(gif))
+        return _Animada(primeiro, duracoes, arquivo, diferencas)
     tempo = arquivo.with_suffix(".json")
     if not tempo.is_file():
         return None
     try:
         dados = json.loads(tempo.read_text(encoding="utf-8"))
         largura, altura = dados["quadro"]
-        quadros, duracao = int(dados["quadros"]), int(dados["duracao"])
+        quadros, duracao, colunas = int(dados["quadros"]), int(dados["duracao"]), int(dados["colunas"])
     except (ValueError, KeyError, TypeError):
         return None
-    primeiro = abrir(arquivo).crop((0, 0, largura, altura))
-    return primeiro, [duracao] * quadros, arquivo.parent / f"{dados.get('cena', arquivo.stem)}.png"
+    folha = abrir(arquivo)
+    caixas = [((i % colunas) * largura, (i // colunas) * altura) for i in range(quadros)]
+    diferencas = _diferencas(folha.crop((x, y, x + largura, y + altura)) for x, y in caixas)
+    return _Animada(folha.crop((0, 0, largura, altura)), [duracao] * quadros,
+                    arquivo.parent / f"{dados.get('cena', arquivo.stem)}.png", diferencas)
 
 
 # --- medidas de apoio ----------------------------------------------------------------------------
@@ -813,6 +861,18 @@ def _rampa_matiz(alvo: Image.Image, estilo: Estilo | None) -> Checagem:
                     f"{estilo.nome}, menor mudança {muda:.0f}° em {papel} (mín {RAMPA_MATIZ}°)")
 
 
+def _laco_dos_quadros(diferencas: list[float] | None) -> Checagem:
+    if diferencas is None:
+        return Checagem("laço dos quadros", "pulada", "o GIF toca uma vez (sem repetição): o fim não precisa voltar ao começo")
+    *vizinhos, emenda = diferencas
+    maior = max(vizinhos)
+    medida = f"do último para o primeiro {emenda:.3f}, maior troca entre quadros {maior:.3f} (máx {LACO_QUADROS:g}x)"
+    if emenda > LACO_QUADROS * maior:
+        return Checagem("laço dos quadros", "alerta", f"{medida}: a animação pula no fim do laço; faça o último "
+                        "quadro levar ao primeiro (voltas inteiras, ou ida e volta)", True)
+    return Checagem("laço dos quadros", "ok", medida, True)
+
+
 def _tempo(duracoes: list[int] | None) -> Checagem:
     if duracoes is None:
         return Checagem("tempo", "pulada", "imagem parada (sem quadros)")
@@ -956,12 +1016,12 @@ def revisar(
     """
     nome = Path(imagem).name if isinstance(imagem, (str, Path)) else "imagem"
     animada = _animacao(Path(imagem)) if isinstance(imagem, (str, Path)) else None
-    duracoes = None
+    duracoes = diferencas = None
     parada = imagem
     if animada is None:
         original = abrir(imagem)
     else:
-        original, duracoes, parada = animada
+        original, duracoes, parada, diferencas = animada.primeiro, animada.duracoes, animada.parada, animada.diferencas
     marca = marca_de_laco(imagem) if laco is None and isinstance(imagem, (str, Path)) else None
     if isinstance(estilo, str):
         estilo = carregar_estilo(estilo)
@@ -1047,5 +1107,7 @@ def revisar(
         _linha_iso(silhuetas),
         _tempo(duracoes),
     ]
+    if animada is not None:
+        checagens.append(_laco_dos_quadros(diferencas))
     return Revisao(nome=nome, largura=alvo.width, altura=alvo.height, tipo=tipo, escala=escala,
                    camadas=[n for n, _ in lidas], checagens=checagens, imagem=alvo)

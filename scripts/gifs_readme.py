@@ -2,8 +2,8 @@
 
     python scripts/gifs_readme.py
 
-- parallax.gif: a cena de exemplos/montar_cena.py no estilo noturno, com a câmera indo e voltando e
-  cada camada andando na sua velocidade (o laço deixa a camada dar a volta na borda).
+- parallax.gif: o exemplo snes-diurno-animado pelo próprio `gerar`, um laço inteiro sem emenda com
+  cada plano na sua velocidade, ampliado 2 vezes.
 - estilos.gif: a mesma receita nos três presets do pacote.
 - revisar.gif: antes e depois do `revisar`, com o relatório em texto.
 - referencia.gif: uma referência pintada aqui mesmo vira paleta e rampas pelo `ref`, e a receita
@@ -15,6 +15,7 @@ sistema sem suavização; sem ela, a fonte padrão do Pillow.
 from __future__ import annotations
 
 import importlib.util
+import json
 import math
 import sys
 from pathlib import Path
@@ -25,6 +26,7 @@ RAIZ = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(RAIZ))
 
 from pixel_atelier import ampliar, carregar_estilo, compor, desenhar, extrair_estilo, gerar, revisar  # noqa: E402
+from pixel_atelier.animacao import gravar_gif as gravar_animacao  # noqa: E402
 
 PASTA = RAIZ / "docs"
 ESCALA = 3
@@ -70,17 +72,6 @@ def camadas_da_cena(estilo, ajustes: dict) -> list[Image.Image]:
     for forma, parametros in ajustes.get("extras", []):
         camadas.append(desenhar(forma, estilo, LARGURA, ALTURA, **parametros))
     return camadas
-
-
-def rolar(imagem: Image.Image, dx: int) -> Image.Image:
-    """Anda a camada dx pixels para a esquerda, dando a volta na borda (a camada tem laço)."""
-    dx %= imagem.width
-    if dx == 0:
-        return imagem
-    nova = Image.new(imagem.mode, imagem.size)
-    nova.paste(imagem.crop((dx, 0, imagem.width, imagem.height)), (0, 0))
-    nova.paste(imagem.crop((0, 0, dx, imagem.height)), (imagem.width - dx, 0))
-    return nova
 
 
 def gravar_gif(quadros: list[Image.Image], duracoes: list[int] | int, nome: str) -> Path:
@@ -136,23 +127,12 @@ def empilhar(cima: Image.Image, baixo: Image.Image) -> Image.Image:
 # ------------------------------------------------------------------ GIFs
 
 def gif_parallax() -> Path:
-    """A câmera vai e volta com aceleração suave; cada camada anda na proporção da sua distância.
-
-    Ida e volta em vez de uma volta inteira da cena: com laço, cada camada só fecha o ciclo depois de
-    andar a largura toda, e isso pede centenas de quadros (o GIF passaria de 5 MB).
-    """
-    nome = "metroidvania-noturno"
-    camadas = camadas_da_cena(carregar_estilo(nome), MONTAR.AJUSTES[nome])
-    # céu, nuvem, montanhas, pinheiros, névoa, mata, chão, cristal, rocha, copa; névoa baixa, raios
-    fatores = [0, 0.1, 0.05, 0.35, 0.45, 0.65, 1, 1, 1, 1.3, 1, 0]
-    assert len(fatores) == len(camadas)
-    passos, percurso = 50, 96  # quadros da ida; pixels reais que a camada de fator 1 anda
-    posicoes = [percurso * (1 - math.cos(math.pi * f / passos)) / 2 for f in range(passos + 1)]
-    ida = [ampliar(compor(rolar(c, round(k * p)) for c, k in zip(camadas, fatores)), ESCALA) for p in posicoes]
-    quadros = ida + ida[-2:0:-1]
-    duracoes = [50] * len(quadros)
-    duracoes[0] = duracoes[passos] = 900  # pausa nas pontas
-    return gravar_gif(quadros, duracoes, "parallax.gif")
+    """Ampliado 2 vezes, não 3: o laço inteiro tem 96 quadros e em 3x o GIF passaria de 4 MB."""
+    receita = json.loads((RAIZ / "exemplos" / "snes-diurno-animado.json").read_text(encoding="utf-8"))
+    resultado = gerar(receita)
+    destino = PASTA / "parallax.gif"
+    gravar_animacao(resultado.quadros, destino, resultado.receita.animacao.duracao, True, escala=2)
+    return destino
 
 
 def gif_estilos() -> Path:

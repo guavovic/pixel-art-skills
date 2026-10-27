@@ -17,7 +17,7 @@
 
 Ateliê de pixel art para agentes de IA. O agente escreve uma receita JSON curta e lê as respostas em texto; a técnica (paleta, rampas, luz, pontilhado, laço sem emenda) fica guardada no motor, e a mesma receita com a mesma seed dá sempre os mesmos pixels.
 
-<img src="docs/parallax.gif" alt="Cena noturna em camadas, com a câmera indo e voltando e cada camada andando na sua velocidade" width="100%">
+<img src="docs/parallax.gif" alt="Cena diurna em camadas num laço sem emenda, com cada plano andando na sua velocidade" width="100%">
 
 <img src="docs/estilos.gif" alt="A mesma receita nos estilos metroidvania-noturno, snes-diurno e game-boy" width="100%">
 

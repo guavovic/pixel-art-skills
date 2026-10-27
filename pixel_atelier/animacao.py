@@ -5,8 +5,12 @@ não pisca). No laço de `quadros` quadros, a camada dá um número inteiro de v
 então o quadro seguinte ao último é o primeiro:
 
 - parallax: `voltas` da receita para a camada mais perto (profundidade 0), menos quanto mais
-  funda (`round(voltas * (1 - profundidade))`); o céu, no fundo, fica parado;
-- nuvem e névoa: 1 volta a mais, de vento;
+  funda (perto de `voltas * (1 - profundidade)`); o céu, no fundo (profundidade 1), fica parado.
+  Toda camada mais perto que o céu dá pelo menos 1 volta, e profundidades diferentes dão voltas
+  diferentes enquanto couberem em `voltas` (com 4 voltas, 4 profundidades andam cada uma na sua);
+- `voltas` na camada fixa as voltas dela, sem olhar a profundidade;
+- nuvem, névoa e raios (atmosfera) seguem só a conta acima, sem disputar voltas com as outras;
+  nuvem e névoa dão 1 volta a mais, de vento;
 - raios: pulsam (a intensidade cai e volta duas vezes no laço, em poucos degraus);
 - camada sem laço não anda (a borda abriria um buraco).
 
@@ -22,10 +26,11 @@ from PIL import Image, ImageChops
 
 from .formas import desenhar
 from .imagem import MARCA_LACO, ampliar, compor
-from .receita import Animacao, Receita, colunas_da_folha, parametros_da_forma
+from .receita import Animacao, Camada, Receita, colunas_da_folha, parametros_da_forma
 
 CORES_GIF = 256
 COM_VENTO = ("nuvem", "nevoa")
+ATMOSFERA = ("nuvem", "nevoa", "raios")
 PULSOS = 2  # vezes que os raios caem e voltam no laço
 PULSO_FUNDO = 0.55  # intensidade mais fraca do pulso, em fração da intensidade da receita
 PULSO_DEGRAUS = 3  # degraus entre o fundo e o topo (cada degrau é um desenho a mais)
@@ -33,18 +38,20 @@ PULSO_DEGRAUS = 3  # degraus entre o fundo e o topo (cada degrau é um desenho a
 
 @dataclass
 class Movimento:
-    """O que uma camada faz no laço: `voltas` na largura e se os raios pulsam."""
+    """O que uma camada faz no laço: `voltas` na largura, se os raios pulsam e quantos pixels anda por quadro."""
 
     voltas: int
     pulsa: bool = False
+    passo: float = 0.0
 
     def descrever(self) -> str:
+        voltas = f"{self.voltas} volta{'s' if self.voltas > 1 else ''} ({self.passo:.1f} px/quadro)".replace(".", ",")
         if self.pulsa and self.voltas:
-            return f"pulsa e dá {self.voltas} volta{'s' if self.voltas > 1 else ''}"
+            return f"pulsa e dá {voltas}"
         if self.pulsa:
             return "pulsa"
         if self.voltas:
-            return f"{self.voltas} volta{'s' if self.voltas > 1 else ''}"
+            return voltas
         return "parada"
 
 
@@ -54,15 +61,45 @@ def _parametro(forma: str, parametros: dict, nome: str):
     return parametros_da_forma(forma)[nome].default
 
 
-def movimento(forma: str, parametros: dict, animacao: Animacao) -> Movimento:
-    pulsa = forma == "raios"
-    if not parametros["laco"]:
-        return Movimento(0, pulsa)
-    profundidade = min(1.0, max(0.0, _parametro(forma, parametros, "profundidade")))
-    voltas = round(animacao.voltas * (1 - profundidade))
-    if forma in COM_VENTO:
-        voltas += 1
-    return Movimento(voltas, pulsa)
+def _profundidade(c: Camada) -> float:
+    return min(1.0, max(0.0, _parametro(c.forma, c.parametros, "profundidade")))
+
+
+def voltas_por_profundidade(profundidades: list[float], voltas: int) -> dict[float, int]:
+    """Voltas de cada profundidade: perto de `voltas * (1 - p)`, pelo menos 1 abaixo de 1 e uma
+    para cada profundidade enquanto couberem em `voltas` (senão, arredondado)."""
+    andam = sorted({p for p in profundidades if p < 1}, reverse=True)
+    saida = {p: 0 for p in profundidades}
+    cabem = len(andam) <= voltas
+    anterior = 0
+    for i, p in enumerate(andam):
+        if not voltas:
+            break
+        menor = anterior + 1 if cabem else max(1, anterior)
+        maior = voltas - (len(andam) - 1 - i) if cabem else voltas
+        anterior = min(maior, max(menor, round(voltas * (1 - p))))
+        saida[p] = anterior
+    return saida
+
+
+def movimentos(camadas: list[Camada], animacao: Animacao, largura: int) -> list[Movimento]:
+    """Movimento de cada camada no laço."""
+    def pela_profundidade(c: Camada) -> bool:
+        return c.parametros["laco"] and c.voltas is None and c.forma not in ATMOSFERA
+
+    solidas = voltas_por_profundidade([_profundidade(c) for c in camadas if pela_profundidade(c)], animacao.voltas)
+    saida = []
+    for c in camadas:
+        if not c.parametros["laco"]:
+            voltas = 0
+        elif c.voltas is not None:
+            voltas = c.voltas
+        elif c.forma in ATMOSFERA:
+            voltas = round(animacao.voltas * (1 - _profundidade(c))) + (c.forma in COM_VENTO)
+        else:
+            voltas = solidas[_profundidade(c)]
+        saida.append(Movimento(voltas, c.forma == "raios", voltas * largura / animacao.quadros))
+    return saida
 
 
 def deslocamento_no_quadro(voltas: int, largura: int, quadro: int, quadros: int) -> int:
@@ -86,7 +123,7 @@ class Animador:
         self.receita = receita
         self.animacao = receita.animacao
         self.imagens = imagens
-        self.movimentos = [movimento(c.forma, c.parametros, self.animacao) for c in receita.camadas]
+        self.movimentos = movimentos(receita.camadas, self.animacao, receita.largura)
         self._pulsos: dict[tuple[int, float], Image.Image] = {}
 
     def _camada(self, indice: int, quadro: int) -> Image.Image:
