@@ -42,8 +42,8 @@ olhar valor e não matiz é o teste da imagem em escala de cinza.
   mais) e lados parecidos entre si (até 0,04). Luz de um lado só não cai aqui.
 - serrilhado (heurística): no perfil de cada lado da silhueta, um degrau com comprimento fora do
   ritmo dos vizinhos (3,1,3 ou 1,3,1; diferença de 2 ou mais). Alerta acima de 6% dos degraus.
-- escala (heurística): em ladrilhos de 16x16 com 3 ou mais comprimentos de trecho de cor, o
-  máximo divisor comum deles é o bloco; dois ou mais ladrilhos com bloco diferente do resto é
+- escala (heurística): em ladrilhos de 16x16 com 3 ou mais comprimentos de trecho de cor e 12
+  trechos ou mais, o máximo divisor comum deles é o bloco; dois ou mais ladrilhos com bloco diferente do resto é
   alerta (sprite ampliado no meio da cena).
 - composição repetida (heurística): trecho de 12x12 que aparece igual 3 vezes ou mais, sem
   sobrepor. Só conta trecho com detalhe: 4 cores ou mais, nenhuma em mais de 60% e pelo menos 6
@@ -119,6 +119,7 @@ PILLOW_LADOS = 0.04
 SERRILHADO_MAX = 0.06
 LADRILHO = 16
 LADRILHOS_FORA = 2
+LADRILHO_TRECHOS = 12  # trechos de cor inteiros para o ladrilho mostrar a escala
 JANELA = 12
 JANELA_CORES = 4
 JANELA_DOMINANTE = 0.6  # trecho com uma cor em mais disso é liso demais para contar como cópia
@@ -127,7 +128,7 @@ COPIAS = 3
 COPIAS_LADRILHOS = 5  # 8 e 16 bits montavam o fundo com ladrilhos de 8x8 repetidos: 3 cópias ali é o normal
 ATMOSFERA = 0.5  # camada com mais pixels de borda do que isso (fração) é névoa ou raio pontilhado
 LACO_EMENDA = 3  # emenda acima disso vezes a média entre colunas vizinhas (e acima da maior) é laço quebrado
-LACO_FOLGA = 1.05  # e acima da maior com 5% de folga: tronco inclinado cruzando a emenda põe as colunas dali no mesmo nível
+LACO_FOLGA = 1.2  # e acima da maior com 20% de folga: borda de nuvem ou tronco que cai na emenda chega a 1,15; corte de verdade passa de 1,3
 LACO_QUADROS = 1.1  # do último quadro para o primeiro acima disso vezes a maior troca entre quadros seguidos: pulo (o laço certo chega a 1,03)
 LACO_LADO = 32  # px; a conta do laço roda nos quadros reduzidos a essa largura, onde o passo grande não satura
 # RAMPA_MATIZ (3°), RAMPA_SATURACAO (0,1) e RAMPA_ESCURA (0,25) ficam em `cor`: a grade da geração usa os
@@ -642,7 +643,7 @@ def _pillow(silhuetas: list[tuple[str, _Px, dict[tuple[int, int], int]]]) -> Che
         cor, quantas = cores.most_common(1)[0]
         resto = [s.valor(*p) for p, v in prof.items() if v > 1]
         casca = 1
-        if resto and quantas >= 0.85 * len(borda) and luminancia(cor) < _mediana(resto):
+        if resto and quantas >= 0.85 * len(borda) and luminancia(cor) <= _mediana(resto):
             casca = 2  # a borda é o contorno: o sombreado começa um pixel para dentro
         lados: dict[str, list[float]] = {lado: [] for lado in LADOS.values()}
         miolo = []
@@ -733,9 +734,9 @@ def _serrilhado(silhuetas: list[tuple[str, _Px, dict[tuple[int, int], int]]]) ->
     return Checagem("serrilhado", "alerta" if fracao > SERRILHADO_MAX else "ok", detalhe, True)
 
 
-def _bloco_do_ladrilho(px, x0: int, y0: int, x1: int, y1: int) -> tuple[int, int]:
-    """(máximo divisor comum, quantos comprimentos diferentes) dos trechos de cor inteiros no ladrilho."""
-    n = 0
+def _bloco_do_ladrilho(px, x0: int, y0: int, x1: int, y1: int) -> tuple[int, int, int]:
+    """(máximo divisor comum, quantos comprimentos diferentes, quantos trechos) dos trechos de cor inteiros no ladrilho."""
+    n, trechos = 0, 0
     comprimentos: set[int] = set()
     for linhas, ponto in (((y0, y1, x0, x1), lambda a, b: px[b, a]), ((x0, x1, y0, y1), lambda a, b: px[a, b])):
         a0, a1, b0, b1 = linhas
@@ -746,8 +747,9 @@ def _bloco_do_ladrilho(px, x0: int, y0: int, x1: int, y1: int) -> tuple[int, int
                     if inicio is not None:
                         n = math.gcd(n, b - inicio)
                         comprimentos.add(b - inicio)
+                        trechos += 1
                     inicio = b
-    return n, len(comprimentos)
+    return n, len(comprimentos), trechos
 
 
 def _escala(cena: Image.Image) -> Checagem:
@@ -755,8 +757,9 @@ def _escala(cena: Image.Image) -> Checagem:
     blocos: dict[tuple[int, int], int] = {}
     for y0 in range(0, cena.height - LADRILHO + 1, LADRILHO):
         for x0 in range(0, cena.width - LADRILHO + 1, LADRILHO):
-            n, variedade = _bloco_do_ladrilho(px, x0, y0, x0 + LADRILHO, y0 + LADRILHO)
-            if variedade >= 3:  # pontilhado e listras repetem um comprimento só e não contam
+            n, variedade, trechos = _bloco_do_ladrilho(px, x0, y0, x0 + LADRILHO, y0 + LADRILHO)
+            # pontilhado e listras repetem um comprimento só; um seixo sozinho num ladrilho liso tem poucos trechos
+            if variedade >= 3 and trechos >= LADRILHO_TRECHOS:
                 blocos[(x0, y0)] = n
     if not blocos:
         return Checagem("escala", "pulada", "pouco detalhe para medir", True)

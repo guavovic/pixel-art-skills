@@ -15,11 +15,14 @@ import itertools
 import math
 from dataclasses import dataclass
 
-from .cor import RAMPA_MATIZ, RGB, cor_mais_proxima, distancia2, hex_para_rgb, mudanca_de_matiz
+from .cor import (RAMPA_MATIZ, RGB, cor_mais_proxima, distancia2, hex_para_rgb, luminancia, mudanca_de_matiz,
+                  sem_repetir)
 
 MODERNO = 64
 NOMES = {"8-bits": 8, "16-bits": 16, "32-bits": 32, "moderno": MODERNO, "hd": MODERNO}
 FOLGA_DA_GRADE = 2  # candidata da grade até 2 vezes a distância (ao quadrado) da cor mais perto
+VALOR_GUARDADO = 0.5  # na grade, o degrau de valor entre tons vizinhos da paleta fechada fica com metade ou mais
+COMBINACOES_MAX = 10_000
 
 # NES (2C02), como a paleta "Nintendo Entertainment System" do Lospec
 CORES_NES = tuple(hex_para_rgb(c) for c in (
@@ -150,7 +153,7 @@ def matiz_na_grade(rampa: list[RGB], grade: str) -> list[RGB]:
     Fica igual quando a cor mais perto da grade guarda o matiz (a paleta leva cada tom para ela).
     Se ali a rampa passa a mudar menos de `RAMPA_MATIZ`, como o cristal azul que o NES põe numa
     coluna só, vale a combinação de candidatas (`_candidatas`) que muda o matiz no mesmo sentido do
-    tema com a menor distância somada; sem nenhuma assim, fica igual.
+    tema e mais perto dele, com a menor distância somada no empate; sem nenhuma assim, fica igual.
     """
     tema = mudanca_de_matiz(rampa)
     perto = mudanca_de_matiz([na_grade(c, grade) for c in rampa])
@@ -162,7 +165,39 @@ def matiz_na_grade(rampa: list[RGB], grade: str) -> list[RGB]:
     opcoes = [r for r in combinacoes if _guarda_o_matiz(r, tema[0])]
     if not opcoes:
         return rampa
-    return min(opcoes, key=lambda r: sum(distancia2(a, b) for a, b in zip(rampa, r)))
+
+    def longe_do_tema(opcao: list[RGB]) -> tuple[float, int]:
+        graus = abs(mudanca_de_matiz(opcao)[0] - tema[0])
+        return graus, sum(distancia2(a, b) for a, b in zip(rampa, opcao))
+
+    return min(opcoes, key=longe_do_tema)
+
+
+def valor_na_grade(paleta: list[RGB], grade: str) -> dict[RGB, RGB]:
+    """Cor da grade para cada cor de uma paleta fechada, sem juntar o valor de tons vizinhos.
+
+    Fica a cor mais perto quando ela guarda pelo menos `VALOR_GUARDADO` de cada degrau de valor
+    entre tons vizinhos. Se não guarda, como os dois verdes escuros do Game Boy que o NES põe a 0,04
+    um do outro, vale a combinação de candidatas (`_candidatas`) que guarda a maior fração do degrau
+    mais apertado, com a menor distância somada no empate.
+    """
+    cores = sorted(sem_repetir(paleta), key=luminancia)
+    degraus_do_tema = [max(luminancia(b) - luminancia(a), 0.01) for a, b in zip(cores, cores[1:])]
+
+    def guardado(opcao: tuple[RGB, ...]) -> float:
+        degraus = [luminancia(b) - luminancia(a) for a, b in zip(opcao, opcao[1:])]
+        return min((d / t for d, t in zip(degraus, degraus_do_tema)), default=1.0)
+
+    perto = tuple(na_grade(c, grade) for c in cores)
+    candidatas = [_candidatas(c, grade) for c in cores]
+    muitas = math.prod(len(c) for c in candidatas) > COMBINACOES_MAX
+    if guardado(perto) >= VALOR_GUARDADO or muitas:
+        return dict(zip(cores, perto))
+
+    def perda(opcao: tuple[RGB, ...]) -> tuple[float, int]:
+        return -guardado(opcao), sum(distancia2(a, b) for a, b in zip(cores, opcao))
+
+    return dict(zip(cores, min(itertools.product(*candidatas), key=perda)))
 
 
 def reduzir_paleta(cores: list[RGB], limite: int) -> list[RGB]:

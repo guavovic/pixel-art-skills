@@ -27,7 +27,7 @@ Cena de jogo em camadas: o fundo dá o clima, a camada da ação precisa ler em 
 
 ## Laço
 - Fundo de rolagem dá a volta: a coluna da borda direita encosta na da esquerda. Emenda visível (árvore cortada, degradê que não volta) pisca a cada volta da câmera.
-- `revisar` confere o laço sozinho na cena que o `gerar` marcou com laço (a marca fica no PNG; `--laco`, ou `laco` na ferramenta MCP, força a conferência numa imagem sem marca). Ele mede a diferença de valor entre a coluna da direita e a da esquerda, no composto e em cada camada; pixel cheio contra vazio conta 1. Alerta quando a emenda passa de **3** vezes a média das diferenças entre colunas vizinhas (`LACO_EMENDA`) e também a maior delas com **1,05** de folga (`LACO_FOLGA`). Num laço certo a emenda é só mais um par de colunas; 3 vezes a média deixa folga para a borda de um objeto que cai bem na emenda.
+- `revisar` confere o laço sozinho na cena que o `gerar` marcou com laço (a marca fica no PNG; `--laco`, ou `laco` na ferramenta MCP, força a conferência numa imagem sem marca). Ele mede a diferença de valor entre a coluna da direita e a da esquerda, no composto e em cada camada; pixel cheio contra vazio conta 1. Alerta quando a emenda passa de **3** vezes a média das diferenças entre colunas vizinhas (`LACO_EMENDA`) e também a maior delas com **1,2** de folga (`LACO_FOLGA`). Num laço certo a emenda é só mais um par de colunas; a folga cobre a borda de um objeto que cai bem na emenda (até 1,15 vez a maior), e a camada desenhada sem laço passa de 1,3.
 - Conserto: a camada com `"laco": true` (padrão da receita), largura múltipla de 8.
 
 ## Como pedir

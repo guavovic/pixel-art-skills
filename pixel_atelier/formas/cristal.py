@@ -14,13 +14,23 @@ from ._base import preparar, semente
 from .rocha import pedra
 
 
+def _ombro(x: float, ponta: tuple[float, float], base: float, h: float) -> float:
+    """Altura do ombro em `x`: lado do telhado íngreme cai em degraus iguais (2,2,2 e não 2,2,3)."""
+    largura, altura = abs(round(x) - ponta[0]), h * 0.38
+    ingreme = largura >= 1 and altura >= 1.5 * largura
+    if ingreme:
+        altura = round(altura / largura) * largura
+    return min(base - 1, ponta[1] + altura)
+
+
 def prisma(tela: Tela, cx: float, base: float, h: float, w: float, inclinacao: float, lado_luz: int = -1) -> list[Peca]:
     """Um prisma de 5 lados. A metade do lado da luz (`lado_luz` -1 esquerda, 1 direita) ganha um tom acima."""
-    ponta = (cx + inclinacao * h, base - h)
-    ombro = base - h * 0.62
-    corpo = [(cx - w, base), (cx - w, ombro), ponta, (cx + w, ombro), (cx + w, base)]
-    borda = cx + w * (1 if lado_luz > 0 else -1)
-    face = [(borda, base), (borda, ombro), ponta, (cx + inclinacao * h * 0.6, ombro + 1), (cx, base)]
+    ponta = (round(cx + inclinacao * h), round(base - h))
+    esquerda, direita = round(cx - w), round(cx + w)
+    ombros = {esquerda: _ombro(esquerda, ponta, base, h), direita: _ombro(direita, ponta, base, h)}
+    corpo = [(esquerda, base), (esquerda, ombros[esquerda]), ponta, (direita, ombros[direita]), (direita, base)]
+    borda = direita if lado_luz > 0 else esquerda
+    face = [(borda, base), (borda, ombros[borda]), ponta, (cx + inclinacao * h * 0.6, ombros[borda] + 1), (cx, base)]
     m, f = tela.nova_mascara(), tela.nova_mascara()
     tela.poligono(m, corpo)
     tela.poligono(f, face)
