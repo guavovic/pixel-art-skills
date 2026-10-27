@@ -1,0 +1,134 @@
+{
+  "cena": "moderno",
+  "descricao": "A cena de montar_cena.py na técnica moderna: 640x360, rampas longas, selout e textura.",
+  "estilo": "moderno",
+  "ampliar": 2,
+  "saida": "composto",
+  "camadas": [
+    {
+      "forma": "ceu",
+      "seed": 1,
+      "horizonte": 0.8,
+      "astro": "sol",
+      "posicao": [
+        0.78,
+        0.18
+      ],
+      "halo": 0.35
+    },
+    {
+      "forma": "nuvem",
+      "seed": 2,
+      "profundidade": 0.95,
+      "quantidade": 4,
+      "faixa": [
+        0.12,
+        0.34
+      ],
+      "tamanho": [
+        0.3,
+        0.5
+      ]
+    },
+    {
+      "forma": "terreno",
+      "nome": "montanhas",
+      "seed": 3,
+      "profundidade": 0.85,
+      "base": 0.62,
+      "amplitude": 0.3,
+      "aspereza": 0.45,
+      "papel": "pedra",
+      "superficie": "neve",
+      "pedrinhas": 0,
+      "escurecer": false
+    },
+    {
+      "forma": "arvore",
+      "nome": "pinheiros",
+      "seed": 4,
+      "profundidade": 0.65,
+      "tipo": "pinheiro",
+      "base": 0.7,
+      "tamanho": [
+        0.14,
+        0.24
+      ],
+      "espaco": [
+        0.5,
+        0.9
+      ]
+    },
+    {
+      "forma": "nevoa",
+      "seed": 5,
+      "profundidade": 0.55,
+      "centro": 0.66,
+      "espessura": 0.1,
+      "densidade": 0.4
+    },
+    {
+      "forma": "arvore",
+      "nome": "mata",
+      "seed": 6,
+      "profundidade": 0.35,
+      "tipo": "mista",
+      "base": 0.8,
+      "tamanho": [
+        0.3,
+        0.48
+      ],
+      "espaco": [
+        0.8,
+        1.6
+      ]
+    },
+    {
+      "forma": "terreno",
+      "nome": "chao",
+      "seed": 9,
+      "base": 0.88,
+      "amplitude": 0.03
+    },
+    {
+      "forma": "cristal",
+      "seed": 7,
+      "quantidade": 2,
+      "base": 0.87,
+      "tamanho": [
+        0.12,
+        0.18
+      ],
+      "brilho": 0.0
+    },
+    {
+      "forma": "rocha",
+      "seed": 8,
+      "quantidade": 3,
+      "base": 0.875,
+      "tamanho": [
+        0.08,
+        0.14
+      ],
+      "musgo": 0.6
+    },
+    {
+      "forma": "arvore",
+      "nome": "copa-na-frente",
+      "seed": 10,
+      "tipo": "copa",
+      "base": 1.02,
+      "tamanho": [
+        0.75,
+        0.85
+      ],
+      "espaco": [
+        5.0,
+        6.0
+      ],
+      "inicio": 0.0,
+      "fim": 0.1,
+      "macico": false
+    }
+  ]
+}

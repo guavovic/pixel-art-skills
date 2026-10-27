@@ -14,7 +14,7 @@ from pixel_atelier.guia import capitulo, capitulos
 
 EXEMPLOS = Path(__file__).resolve().parent.parent / "exemplos"
 CAPITULOS = {"fundamentos", "cor", "angulo", "escala", "luz", "pontilhado", "animacao", "composicao", "estilos",
-             "erros"}
+             "erros", "geracoes"}
 
 
 def test_indice_aponta_para_cada_capitulo():
@@ -37,7 +37,8 @@ def test_nome_desconhecido_lista_os_que_existem():
 
 LIMIARES = ("CORES_SPRITE", "CORES_CENA", "QUASE_IGUAL", "CONTRASTE_CAMADAS", "CONTRASTE_FRENTE", "SOME", "SOME_MAX",
             "FAIXA_FUNDO", "FAIXA_SPRITE", "SOLTOS_MAX", "PILLOW_MIOLO", "PILLOW_LADOS", "SERRILHADO_MAX", "LADRILHO",
-            "LADRILHOS_FORA", "JANELA", "COPIAS", "ATMOSFERA", "LACO_EMENDA",
+            "LADRILHOS_FORA", "JANELA", "COPIAS", "ATMOSFERA", "LACO_EMENDA", "LACO_FOLGA",
+            "COPIAS_LADRILHOS", "LADRILHOS_ATE", "LINHAS_POR_JANELA",
             "RAMPA_MATIZ", "RAMPA_SATURACAO", "RAMPA_ESCURA", "CONTORNO_UMA_COR", "PRETO", "AA_LADO", "ISO_DEGRAUS",
             "ISO_DOIS", "TEMPO_MINIMO", "TEMPO_MAXIMO", "LACO_QUADROS")
 
@@ -62,7 +63,8 @@ def test_cada_limiar_do_revisar_esta_no_guia():
                        for n in _escrito(nome, getattr(revisao, nome))), (nome, linha)
 
 
-@pytest.mark.parametrize("nome", ["metroidvania-noturno", "snes-diurno", "game-boy"])
+@pytest.mark.parametrize("nome", ["metroidvania-noturno", "snes-diurno", "game-boy", "8-bits", "16-bits", "32-bits",
+                                  "moderno"])
 def test_exemplos_do_pacote_passam_sem_alerta(nome, tmp_path):
     receita = json.loads((EXEMPLOS / f"{nome}.json").read_text(encoding="utf-8"))
     gerar({**receita, "saida": "tudo", "ampliar": 1}, pasta=tmp_path)

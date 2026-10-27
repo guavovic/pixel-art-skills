@@ -15,6 +15,7 @@ Ler um capítulo: `python -m pixel_atelier guia <capitulo>`, a ferramenta MCP `g
 | `animacao` | quadros, tempo, ciclo de andar, cenário animado | tempo |
 | `composicao` | camadas, profundidade, onde está o foco, laço | contraste, composição repetida, laço |
 | `estilos` | SNES, Game Boy, metroidvania moderno | cores (com `--estilo`) |
+| `geracoes` | 8, 16, 32 bits ou moderno, limites de cada época | cores, cores por camada, composição repetida |
 | `erros` | a arte "não lê", personagem some, fundo apagado | legibilidade, contraste |
 
 Regra central: **legibilidade vem do contraste de valor, nunca de apagar ou escurecer o fundo.** Valor é a luminância de 0 a 1 (o teste da imagem em escala de cinza).
