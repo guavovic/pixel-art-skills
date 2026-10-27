@@ -175,3 +175,17 @@ def test_nevoa_enche_mais_com_mais_densidade():
         return alfa.histogram()[255]
 
     assert 0 < acesos(0.05) < acesos(0.3) < acesos(0.6)
+
+
+@pytest.mark.parametrize("y_baixo, alto, meia", [(130.4, 21.7, 7), (101.0, 13.2, 4), (77.6, 30.9, 9), (60.0, 18.4, 10)])
+def test_andar_do_pinheiro_cai_em_degraus_iguais_no_compasso_do_primeiro(y_baixo, alto, meia):
+    from pixel_atelier.formas.arvore import _andar
+    compasso = 151
+    pe, ponta = _andar(y_baixo, alto, meia, 20.0, compasso)
+    altura = pe - ponta
+    ingreme = altura >= 1.5 * meia
+    if ingreme:
+        degrau = altura // meia
+        assert altura == degrau * meia and (compasso - pe) % degrau == 0
+    else:
+        assert pe == round(y_baixo)

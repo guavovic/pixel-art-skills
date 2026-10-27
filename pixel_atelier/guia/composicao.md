@@ -32,7 +32,7 @@ Cena de jogo em camadas: o fundo dá o clima, a camada da ação precisa ler em 
 
 ## Como pedir
 - Camadas do fundo para a frente; `profundidade` de 1 (longe) a 0 (perto) puxa as cores para a atmosfera do estilo.
-- Separação entre camadas: afaste as `profundidade` de camadas vizinhas (0,85 e 0,65 já é pouco no noturno; 0,95 e 0,65 separa) ou troque o `papel` de uma delas.
+- Separação entre camadas: afaste as `profundidade` de camadas vizinhas (0,85 e 0,65 já é pouco no noturno; 0,95 e 0,65 separa) ou troque o `papel` de uma delas. Mexa na camada da frente do par, não na de trás. Numa grade fechada (8 bits, a do NES) duas profundidades perto podem cair na mesma cor da grade: no noturno em 8 bits, pinheiros a 0,65 e montanhas a 0,95 viram os dois `#004058`, e os pinheiros a 0,4 já separam (0,20). A linha `contraste` diz qual camada separar.
 - Variação: `seed` por camada, `espaco`, `tamanho`, `quantidade`.
 - Conferir: `revisar cena.png` lê as camadas da pasta `<cena>/` e diz qual camada tem o contraste mais baixo. Sem a pasta, o contraste sai das silhuetas que o `revisar` separa no composto: mais fraco (camadas de cores quase iguais viram uma só), então para a cena final grave as camadas (`"saida": "tudo"`).
 
