@@ -322,6 +322,17 @@ def test_rampa_com_e_sem_mudanca_de_matiz():
     assert regra(revisar(listras(snes.rampas["folha"])), "matiz da rampa").detalhe.startswith("sem estilo")
 
 
+@pytest.mark.parametrize("geracao", ["32-bits", "moderno"])
+def test_rampa_clara_quase_cinza_esticada_guarda_o_matiz(geracao):
+    estilo = carregar_estilo(geracao)  # nuvem do snes-diurno esticada em 6 e 8 tons, quase cinza no claro
+    nuvem = regra(revisar(listras(estilo.rampas["nuvem"]), estilo=estilo), "matiz da rampa")
+    assert nuvem.estado == "ok", nuvem.detalhe
+
+    cinza = carregar_estilo({"base": geracao, "nome": "cinza", "rampas": {"neve": ["#7888b0", "#ffffff"]}})
+    c = regra(revisar(listras(cinza.rampas["neve"]), estilo=cinza), "matiz da rampa")
+    assert c.estado == "alerta" and c.detalhe.startswith("neve #") and "muda 0°" in c.detalhe
+
+
 # --- contorno preto ------------------------------------------------------------------------------
 
 def contornado(contorno) -> Image.Image:

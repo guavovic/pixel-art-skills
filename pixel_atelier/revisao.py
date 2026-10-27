@@ -59,7 +59,7 @@ olhar valor e não matiz é o teste da imagem em escala de cinza.
   par de colunas, então nunca é a maior da imagem com folga; num laço quebrado (objeto cortado,
   degradê que não volta) ela é.
 - matiz da rampa (precisa do `estilo`): cada rampa do estilo que a imagem usa, com 3 ou mais cores de
-  saturação 0,2+, muda pelo menos 3 graus de matiz do tom escuro ao claro. Rampa toda abaixo de
+  saturação 0,1+, muda pelo menos 3 graus de matiz do tom escuro ao claro. Rampa toda abaixo de
   valor 0,25 (silhueta noturna) fica de fora.
 - contorno preto: contorno é a borda com 85% ou mais numa cor só, diferente do miolo. Alerta quando
   todos os contornos são preto puro (canal até 8).
@@ -133,7 +133,7 @@ LACO_FOLGA = 1.05  # e acima da maior com 5% de folga: tronco inclinado cruzando
 LACO_QUADROS = 1.1  # do último quadro para o primeiro acima disso vezes a maior troca entre quadros seguidos: pulo (o laço certo chega a 1,03)
 LACO_LADO = 32  # px; a conta do laço roda nos quadros reduzidos a essa largura, onde o passo grande não satura
 RAMPA_MATIZ = 3  # graus do escuro ao claro: abaixo disso é só o arredondamento do RGB, a rampa só muda o brilho
-RAMPA_SATURACAO = 0.2  # cor menos saturada que isso é quase cinza: o matiz dela não conta
+RAMPA_SATURACAO = 0.1  # cor menos saturada que isso é quase cinza: na grade de 15 bits o matiz dela é só arredondamento
 RAMPA_ESCURA = 0.25  # rampa toda abaixo desse valor (silhueta noturna): no escuro o matiz quase não aparece
 CONTORNO_UMA_COR = 0.85  # fração da borda numa cor só para ela contar como contorno
 PRETO = 8  # canal até isso (#080808): preto puro
