@@ -333,6 +333,15 @@ def test_rampa_clara_quase_cinza_esticada_guarda_o_matiz(geracao):
     assert c.estado == "alerta" and c.detalhe.startswith("neve #") and "muda 0°" in c.detalhe
 
 
+@pytest.mark.parametrize("geracao", [8, 12, 16, 32, 64])
+def test_grade_nao_esconde_rampa_sem_matiz(geracao):
+    plastico = carregar_estilo({"base": "snes-diurno", "nome": "plastico", "geracao": geracao,
+                                "rampas": {"folha": {"base": "#3c8c34", "passos": 5, "matiz": 0}}})
+    c = regra(revisar(listras(plastico.rampas["folha"]), estilo=plastico), "matiz da rampa")
+    assert c.estado == "alerta" and "muda 0°" in c.detalhe, c.detalhe
+    assert ("no tema (a grade dá" in c.detalhe) == (geracao != 64)  # a grade arredonda o matiz em 7° a 24°
+
+
 # --- contorno preto ------------------------------------------------------------------------------
 
 def contornado(contorno) -> Image.Image:

@@ -50,7 +50,7 @@ from typing import Any, Iterator
 
 from .cor import (RGB, cor_mais_proxima, gerar_rampa, hex_para_rgb, luminancia, misturar, rgb_para_hex, sem_quase_iguais,
                   sem_repetir)
-from .geracao import Geracao, geracao as ler_geracao, na_grade, reduzir_paleta
+from .geracao import Geracao, geracao as ler_geracao, matiz_na_grade, na_grade, reduzir_paleta
 
 PAPEIS = ("folha", "tronco", "pedra", "terra", "grama", "cristal", "nuvem", "nevoa", "neve")
 
@@ -117,6 +117,7 @@ class Estilo:
     textura: float = 0.0
     selout: bool = False
     geracao: Geracao | None = None
+    rampas_do_tema: dict[str, tuple[RGB, ...]] = field(default_factory=dict)  # com geração: as rampas antes da grade
     origem: dict[str, Any] = field(default_factory=dict, repr=False)
     _cache: dict = field(default_factory=dict, repr=False, compare=False)
 
@@ -166,8 +167,10 @@ class Estilo:
             if chave not in dados:
                 raise ValueError(f"estilo sem o campo obrigatório {chave!r}")
         epoca = None
+        rampas_do_tema = {}
         if "geracao" in dados:
             epoca = ler_geracao(dados["geracao"])
+            rampas_do_tema = {papel: tuple(_ler_rampa(valor)) for papel, valor in dados["rampas"].items()}
             dados = _com_a_tecnica(dados, epoca)
         sombreamento = dados.get("sombreamento", "faixas")
         if sombreamento not in SOMBREAMENTOS:
@@ -177,6 +180,8 @@ class Estilo:
         atmosfera = hex_para_rgb(dados["atmosfera"])
         luz = hex_para_rgb(dados["luz"])
         rampas = {papel: _ler_rampa(valor) for papel, valor in dados["rampas"].items()}
+        if epoca is not None:
+            rampas = {p: matiz_na_grade(r, epoca.grade) for p, r in rampas.items()}
         forca_atmosfera = float(dados.get("forca_atmosfera", 0.7))
 
         if "paleta" in dados:
@@ -231,6 +236,7 @@ class Estilo:
             textura=epoca.textura if epoca else 0.0,
             selout=epoca is not None and epoca.contorno == "selout",
             geracao=epoca,
+            rampas_do_tema=rampas_do_tema,
             origem=dict(dados),
         )
 

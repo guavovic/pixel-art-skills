@@ -8,6 +8,7 @@ Valor (claro e escuro) carrega a leitura; matiz e saturação dão o clima. Esco
 - Faixa útil: 15° a 30° de matiz entre a ponta escura e a clara.
 - `revisar --estilo` (linha `matiz da rampa`): alerta quando uma rampa do estilo usada na imagem muda menos de **3** graus (`RAMPA_MATIZ`) do tom escuro ao claro. Abaixo de 3° é só o arredondamento do RGB: a rampa muda só o brilho. De 3° a 15° é escolha de clima (noite fria quase num matiz só).
 - Só contam cores com saturação de pelo menos **0,10** (`RAMPA_SATURACAO`; abaixo disso é quase cinza e, na grade de 15 bits, o matiz é só arredondamento), e a rampa toda abaixo de valor **0,25** (`RAMPA_ESCURA`) fica de fora: no escuro o matiz quase não aparece. Rampa clara e pouco saturada (nuvem, neve) muda o matiz no trecho claro, por isso o corte é baixo.
+- Com geração, a rampa do tema (antes da grade) também precisa mudar 3°: o arredondamento da grade sozinho passa disso e esconderia uma rampa que só muda o brilho. O alerta diz `no tema`.
 - Saturação: mais alta nos tons médios e escuros, cai no tom mais claro. Luz quase branca e saturada demais "queima".
 - Passo de valor entre vizinhos da rampa: pelo menos **0,05** (cerca de 13 em 255), senão os dois tons viram um só. É o mesmo número que o `revisar` usa para dizer que uma borda some (`SOME`).
 - Compartilhe tons entre rampas (o escuro da folha serve de sombra da pedra). Paleta fica menor e mais coesa.

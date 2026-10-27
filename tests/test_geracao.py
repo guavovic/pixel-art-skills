@@ -10,7 +10,8 @@ from PIL import Image
 
 from pixel_atelier import carregar_estilo, gerar, revisar
 from pixel_atelier.__main__ import main
-from pixel_atelier.geracao import ANCORAS, CORES_NES, MODERNO, geracao, ler_geracao, na_grade
+from pixel_atelier.cor import mudanca_de_matiz
+from pixel_atelier.geracao import ANCORAS, CORES_NES, MODERNO, geracao, ler_geracao, matiz_na_grade, na_grade
 from pixel_atelier.guia import capitulo
 from pixel_atelier.imagem import gravar_png, marca_de_geracao
 from pixel_atelier.revisao import COPIAS, COPIAS_LADRILHOS, JANELA, _copias_minimas, _lado_da_janela
@@ -61,6 +62,16 @@ def test_rampa_sem_tom_repetido_quando_a_grade_junta_tons():
     for papel in estilo.rampas:
         rampa = estilo.rampa(papel, 0.65)
         assert all(a != b for a, b in zip(rampa, rampa[1:])), papel
+
+
+def test_cor_da_grade_guarda_o_matiz_da_rampa():
+    estilo = carregar_estilo({"base": "metroidvania-noturno", "nome": "noite-8", "geracao": 8})
+    tema, na_grade_ = mudanca_de_matiz(estilo.rampas_do_tema["cristal"]), mudanca_de_matiz(estilo.rampas["cristal"])
+    assert set(estilo.rampas["cristal"]) <= set(CORES_NES) and set(estilo.rampas["cristal"]) <= set(estilo.paleta)
+    assert abs(na_grade_[0]) >= 3 and na_grade_[0] * tema[0] > 0  # o NES punha os 3 tons numa coluna só: 0°
+
+    folha = carregar_estilo("snes-diurno").rampas["folha"]
+    assert matiz_na_grade(list(folha), "nes") == list(folha)  # a cor mais perto já guarda: a paleta decide
 
 
 def test_receita_sem_tamanho_usa_o_da_geracao():
