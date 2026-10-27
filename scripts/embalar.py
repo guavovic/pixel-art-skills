@@ -4,7 +4,7 @@ Fonte (editada à mão):
     AGENTS.md                       seções "Por onde começar", "Fluxo de trabalho" e "Regras de arte"
     pixel_atelier/guia/             nomes dos capítulos
     pixel_atelier/servidor.py       ferramentas MCP (nome e docstring de cada uma)
-    pyproject.toml                  nome, versão e descrição (o servidor sobe com `python -m <pacote>`)
+    pyproject.toml                  pacote, versão, descrição e o comando (o servidor sobe com `python -m <módulo>`)
 
 Saída (nunca editada à mão, sempre regenerada por este script):
     embalagens/claude-code/         plugin do Claude Code (.claude-plugin/plugin.json, .mcp.json, skill)
@@ -36,9 +36,8 @@ RAIZ = Path(__file__).resolve().parent.parent
 SAIDA = "embalagens"
 MARKETPLACE = ".claude-plugin/marketplace.json"
 
-REPO = "https://github.com/guavovic/pixel-atelier"
+REPO = "https://github.com/guavovic/pixel-art-skills"
 AUTOR = {"name": "Gustavo Victor", "url": "https://github.com/guavovic"}
-INSTALAR = f'pip install "pixel-atelier[mcp] @ git+{REPO}"'
 # Interpretador que sobe o servidor (`python -m pixel_atelier mcp`), igual em todas as embalagens: nenhuma das
 # ferramentas tem campo por sistema no servidor MCP, então vale o nome que existe em mais lugares.
 # `python` é o comando do Windows (o instalador do python.org e o venv do Windows não trazem python3; o
@@ -72,13 +71,22 @@ def ler(caminho: Path) -> str:
 
 
 def projeto(raiz: Path) -> dict:
-    """Nome, versão e descrição do pyproject.toml, e o pacote que `python -m` roda."""
+    """Do pyproject.toml: o pacote (nome do plugin, da extensão e do pip install), versão, descrição e o
+    comando de [project.scripts], que dá nome à skill e ao servidor MCP e diz o módulo que `python -m` roda."""
     dados = tomllib.loads(ler(raiz / "pyproject.toml"))["project"]
-    modulo = dados["name"].replace("-", "_")
+    comandos = dados.get("scripts", {})
+    if len(comandos) != 1:
+        raise ErroDeFonte("pyproject.toml precisa de exatamente um comando em [project.scripts]")
+    (nome, alvo), = comandos.items()
+    modulo = alvo.split(":")[0].removesuffix(".__main__")
     if not (raiz / modulo / "__main__.py").is_file():
         raise ErroDeFonte(f"{modulo}/__main__.py não existe; sem ele `python -m {modulo}` não sobe o servidor")
-    return {"nome": dados["name"], "versao": dados["version"], "descricao": dados["description"],
+    return {"pacote": dados["name"], "nome": nome, "versao": dados["version"], "descricao": dados["description"],
             "modulo": modulo}
+
+
+def instalar(f: dict) -> str:
+    return f'pip install "{f["pacote"]}[mcp] @ git+{REPO}"'
 
 
 def secoes_agents(raiz: Path) -> str:
@@ -141,7 +149,7 @@ def instrucoes(f: dict) -> str:
         "## Servidor MCP\n"
         f"Esta embalagem registra o servidor `{f['nome']}` (`{PYTHON} -m {f['modulo']} mcp --raiz <pasta do projeto>`), "
         "que só lê e grava dentro da raiz. Ele precisa estar instalado:\n\n"
-        f"```\n{INSTALAR}\n```\n\n"
+        f"```\n{instalar(f)}\n```\n\n"
         "Ferramentas (toda resposta é texto, nenhuma devolve imagem):\n\n"
         f"{lista}\n\n"
         "Sem o servidor ligado, o mesmo fluxo roda pela linha de comando `python -m pixel_atelier`.\n\n"
@@ -187,7 +195,7 @@ def skill(f: dict) -> str:
 
 def claude_code(f: dict) -> dict[str, str]:
     base = f"{SAIDA}/claude-code"
-    plugin = {"name": f["nome"], "version": f["versao"], "description": f["descricao"], "author": AUTOR,
+    plugin = {"name": f["pacote"], "version": f["versao"], "description": f["descricao"], "author": AUTOR,
               "homepage": REPO, "repository": REPO, "license": "MIT",
               "keywords": ["pixel-art", "mcp", "parallax", "paleta"]}
     return {
@@ -195,10 +203,10 @@ def claude_code(f: dict) -> dict[str, str]:
         f"{base}/.mcp.json": json_texto({"mcpServers": servidor_stdio(f, "${CLAUDE_PROJECT_DIR}")}),
         f"{base}/skills/{f['nome']}/SKILL.md": skill(f),
         MARKETPLACE: json_texto({
-            "name": f["nome"],
-            "description": "Marketplace do pixel-atelier: o plugin com o servidor MCP e a skill do fluxo.",
+            "name": f["pacote"],
+            "description": f"Marketplace do {f['pacote']}: o plugin com o servidor MCP e a skill do fluxo.",
             "owner": AUTOR,
-            "plugins": [{"name": f["nome"], "source": f"./{base}", "description": f["descricao"],
+            "plugins": [{"name": f["pacote"], "source": f"./{base}", "description": f["descricao"],
                          "category": "design"}],
         }),
     }
@@ -222,7 +230,7 @@ def codex(f: dict) -> dict[str, str]:
 
 def gemini(f: dict) -> dict[str, str]:
     base = f"{SAIDA}/gemini"
-    manifesto = {"name": f["nome"], "version": f["versao"], "description": f["descricao"],
+    manifesto = {"name": f["pacote"], "version": f["versao"], "description": f["descricao"],
                  "mcpServers": servidor_stdio(f, "${workspacePath}"), "contextFileName": "GEMINI.md"}
     return {
         f"{base}/gemini-extension.json": json_texto(manifesto),
@@ -232,7 +240,7 @@ def gemini(f: dict) -> dict[str, str]:
 
 def antigravity(f: dict) -> dict[str, str]:
     base = f"{SAIDA}/antigravity"
-    plugin = {"$schema": "https://antigravity.google/schemas/v1/plugin.json", "name": f["nome"],
+    plugin = {"$schema": "https://antigravity.google/schemas/v1/plugin.json", "name": f["pacote"],
               "version": f["versao"], "description": f["descricao"], "author": AUTOR, "homepage": REPO,
               "repository": REPO, "license": "MIT", "keywords": ["pixel-art", "mcp", "parallax", "paleta"]}
     return {
@@ -277,10 +285,10 @@ Antes de qualquer uma, instale o servidor:
 
 | Pasta | Ferramenta | O que tem | Onde colocar |
 |---|---|---|---|
-| `claude-code/` | Claude Code | plugin: `.claude-plugin/plugin.json`, `.mcp.json` e a skill `skills/{nome}/` | `/plugin install {nome} --marketplace guavovic/pixel-atelier`, ou em dois passos `/plugin marketplace add guavovic/pixel-atelier` e `/plugin install {nome}@{nome}` (o marketplace fica em `.claude-plugin/marketplace.json` na raiz do repositório); no clone, `claude --plugin-dir embalagens/claude-code` |
+| `claude-code/` | Claude Code | plugin: `.claude-plugin/plugin.json`, `.mcp.json` e a skill `skills/{nome}/` | `/plugin install {pacote} --marketplace guavovic/{pacote}`, ou em dois passos `/plugin marketplace add guavovic/{pacote}` e `/plugin install {pacote}@{pacote}` (o marketplace fica em `.claude-plugin/marketplace.json` na raiz do repositório); no clone, `claude --plugin-dir embalagens/claude-code` |
 | `codex/` | OpenAI Codex | skill em `.agents/skills/{nome}/` e servidor em `.codex/config.toml` | as duas pastas na raiz do projeto (o `.codex/config.toml` do projeto só vale em projeto confiável), ou a skill em `~/.agents/skills/` e o trecho `[mcp_servers.{nome}]` em `~/.codex/config.toml` |
-| `gemini/` | Gemini CLI | extensão: `gemini-extension.json` (com o servidor) e `GEMINI.md` | `gemini extensions install <clone>/embalagens/gemini` (ou `gemini extensions link` para acompanhar o clone); a extensão fica em `~/.gemini/extensions/{nome}/`, com o nome do manifesto, então a pasta de origem pode se chamar `gemini` |
-| `antigravity/` | Antigravity CLI | plugin: `plugin.json`, `mcp_config.json` (com o servidor) e a skill `skills/{nome}/` | `agy plugin install <clone>/embalagens/antigravity`; o CLI copia para `~/.gemini/antigravity-cli/plugins/{nome}/`, com o nome do manifesto |
+| `gemini/` | Gemini CLI | extensão: `gemini-extension.json` (com o servidor) e `GEMINI.md` | `gemini extensions install <clone>/embalagens/gemini` (ou `gemini extensions link` para acompanhar o clone); a extensão fica em `~/.gemini/extensions/{pacote}/`, com o nome do manifesto, então a pasta de origem pode se chamar `gemini` |
+| `antigravity/` | Antigravity CLI | plugin: `plugin.json`, `mcp_config.json` (com o servidor) e a skill `skills/{nome}/` | `agy plugin install <clone>/embalagens/antigravity`; o CLI copia para `~/.gemini/antigravity-cli/plugins/{pacote}/`, com o nome do manifesto |
 | `cursor/` | Cursor | regra `.cursor/rules/{nome}.mdc`, aplicada quando o agente acha que o pedido pede, e servidor em `.cursor/mcp.json` | a pasta `.cursor/` na raiz do projeto, ou o servidor em `~/.cursor/mcp.json` |
 | `copilot/` | GitHub Copilot | `.github/copilot-instructions.md`, servidor do VS Code em `.vscode/mcp.json` e do Copilot CLI em `.github/mcp.json` | as duas pastas na raiz do repositório; se ele já tiver `copilot-instructions.md` ou `.github/mcp.json`, junte ao que existe. No Copilot CLI, um `.mcp.json` na mesma pasta ganha do `.github/mcp.json`; para valer em todo projeto, o trecho de `mcpServers` vai em `~/.copilot/mcp-config.json` |
 
@@ -301,7 +309,7 @@ def montar(raiz: Path = RAIZ) -> dict[str, str]:
     arquivos: dict[str, str] = {}
     for embalagem in (claude_code, codex, gemini, antigravity, cursor, copilot):
         arquivos.update(embalagem(f))
-    arquivos[f"{SAIDA}/README.md"] = LEIAME.format(aviso=AVISO, instalar=INSTALAR, nome=f["nome"], python=PYTHON,
+    arquivos[f"{SAIDA}/README.md"] = LEIAME.format(aviso=AVISO, instalar=instalar(f), nome=f["nome"], pacote=f["pacote"], python=PYTHON,
                                                    modulo=f["modulo"])
     return arquivos
 

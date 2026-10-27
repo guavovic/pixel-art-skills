@@ -83,7 +83,7 @@ def test_marketplace_aponta_para_o_plugin():
     mercado = json.loads(arquivos[embalar.MARKETPLACE])
     plugin = json.loads(arquivos["embalagens/claude-code/.claude-plugin/plugin.json"])
     entrada = mercado["plugins"][0]
-    assert entrada["name"] == plugin["name"] == "pixel-atelier"
+    assert entrada["name"] == plugin["name"] == "pixel-art-skills"
     assert entrada["source"] == "./embalagens/claude-code"
     assert plugin["version"] == tomllib.loads((RAIZ / "pyproject.toml").read_text(encoding="utf-8"))["project"]["version"]
 

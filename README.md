@@ -1,7 +1,7 @@
-<h1 align="center">pixel-atelier</h1>
+<h1 align="center">pixel-art-skills</h1>
 
 <p align="center">
-  <img src="https://img.shields.io/github/license/guavovic/pixel-atelier?style=flat-square&label=licen%C3%A7a" alt="licença">
+  <img src="https://img.shields.io/github/license/guavovic/pixel-art-skills?style=flat-square&label=licen%C3%A7a" alt="licença">
   <img src="https://img.shields.io/badge/python-3.11%2B-blue?style=flat-square" alt="python 3.11+">
 </p>
 
@@ -41,14 +41,14 @@ Ateliê de pixel art para agentes de IA. O agente escreve uma receita JSON curta
 O servidor vem do pacote Python:
 
 ```
-pip install "pixel-atelier[mcp] @ git+https://github.com/guavovic/pixel-atelier"
+pip install "pixel-art-skills[mcp] @ git+https://github.com/guavovic/pixel-art-skills"
 ```
 
 No Claude Code, o plugin entra por dentro de uma sessão:
 
 ```
-/plugin marketplace add guavovic/pixel-atelier
-/plugin install pixel-atelier@pixel-atelier
+/plugin marketplace add guavovic/pixel-art-skills
+/plugin install pixel-art-skills@pixel-art-skills
 ```
 
 | Ferramenta | Embalagem | Situação |

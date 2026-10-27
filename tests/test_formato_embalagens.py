@@ -25,8 +25,10 @@ embalar = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(embalar)
 
 ARQUIVOS = embalar.montar()
-NOME = tomllib.loads((RAIZ / "pyproject.toml").read_text(encoding="utf-8"))["project"]["name"]
-MODULO = NOME.replace("-", "_")
+_PROJETO = tomllib.loads((RAIZ / "pyproject.toml").read_text(encoding="utf-8"))["project"]
+PACOTE = _PROJETO["name"]  # plugin, marketplace, extensão do Gemini e plugin do Antigravity
+(NOME, _ALVO), = _PROJETO["scripts"].items()  # skill, regra e servidor MCP
+MODULO = _ALVO.split(":")[0].removesuffix(".__main__")
 
 
 def json_de(caminho: str) -> dict:
@@ -121,7 +123,7 @@ def test_claude_code_plugin_json():
         f"{base}/.claude-plugin/plugin.json"}, "só o manifesto fica em .claude-plugin/; o resto vai na raiz"
     plugin = json_de(f"{base}/.claude-plugin/plugin.json")
     assert set(plugin) <= CAMPOS_PLUGIN, set(plugin) - CAMPOS_PLUGIN
-    assert plugin["name"] == NOME and NOME_SKILL.fullmatch(plugin["name"])
+    assert plugin["name"] == PACOTE and NOME_SKILL.fullmatch(plugin["name"])
     assert not re.match(r"(claude|anthropic|anthropics|cc-plugin)-", plugin["name"])
     for campo in ("version", "description", "repository", "license"):
         assert isinstance(plugin[campo], str) and plugin[campo], campo
@@ -212,7 +214,7 @@ def test_gemini_extension_json():
     manifesto = json_de(f"{base}/gemini-extension.json")
     assert set(manifesto) <= CAMPOS_GEMINI, set(manifesto) - CAMPOS_GEMINI
     assert isinstance(manifesto["name"], str) and re.fullmatch(r"[a-z0-9-]+", manifesto["name"])
-    assert manifesto["name"] == NOME
+    assert manifesto["name"] == PACOTE
     assert isinstance(manifesto["version"], str) and manifesto["version"]
     servidor = manifesto["mcpServers"][NOME]
     confere_servidor_stdio(servidor, CHAVES_SERVIDOR_GEMINI, {"command", "args"}, "gemini-extension.json")
@@ -242,7 +244,7 @@ def test_antigravity_plugin_json():
     plugin = json_de(f"{base}/plugin.json")
     assert set(plugin) <= CAMPOS_ANTIGRAVITY, set(plugin) - CAMPOS_ANTIGRAVITY
     assert plugin["$schema"] == "https://antigravity.google/schemas/v1/plugin.json"
-    assert plugin["name"] == NOME and re.fullmatch(r"[a-zA-Z0-9_-]+", plugin["name"])
+    assert plugin["name"] == PACOTE and re.fullmatch(r"[a-zA-Z0-9_-]+", plugin["name"])
     for campo in ("version", "description", "homepage", "repository", "license"):
         assert isinstance(plugin[campo], str) and plugin[campo], campo
     assert set(plugin["author"]) <= {"name", "email", "url"}

@@ -1,14 +1,14 @@
 {
   "$schema": "https://antigravity.google/schemas/v1/plugin.json",
-  "name": "pixel-atelier",
+  "name": "pixel-art-skills",
   "version": "0.1.0",
   "description": "Ateliê de pixel art para agentes de IA: técnica guardada no motor, arte saindo de receitas curtas.",
   "author": {
     "name": "Gustavo Victor",
     "url": "https://github.com/guavovic"
   },
-  "homepage": "https://github.com/guavovic/pixel-atelier",
-  "repository": "https://github.com/guavovic/pixel-atelier",
+  "homepage": "https://github.com/guavovic/pixel-art-skills",
+  "repository": "https://github.com/guavovic/pixel-art-skills",
   "license": "MIT",
   "keywords": [
     "pixel-art",
