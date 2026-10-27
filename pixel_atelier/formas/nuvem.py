@@ -67,9 +67,18 @@ def nuvem(
     ruido_b = ruido_periodico(semente(seed, 7), largura, 8, queda=0.3)
     centro, meia = (topo + fundo) / 2, max(1.0, (fundo - topo) / 2)
 
+    def bruto(x: int, y: int) -> float:
+        return ruido_a(x) * 0.7 + ruido_b(x * 2 + y * 3) * 0.3
+
+    # o alcance do ruído muda com a seed: medido no miolo da faixa, a densidade vale igual para todas
+    linhas_do_miolo = range(int(centro - meia / 2), int(centro + meia / 2) + 1)
+    valores = [bruto(x, y) for y in linhas_do_miolo for x in range(largura)]
+    menor = min(valores)
+    alcance = max(valores) - menor or 1.0
+
     def campo(x: int, y: int) -> float:
         faixa_y = max(0.0, 1 - abs(y - centro) / meia)
-        v = (ruido_a(x) * 0.5 + 0.5) * 0.7 + (ruido_b(x * 2 + y * 3) * 0.5 + 0.5) * 0.3
+        v = (bruto(x, y) - menor) / alcance
         return max(0.0, v - (1 - densidade)) * 2.0 * faixa_y
 
     mascara = tela.pontilhar(campo, escala=2)
