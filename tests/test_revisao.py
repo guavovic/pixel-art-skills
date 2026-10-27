@@ -157,12 +157,10 @@ def test_cena_sem_camadas_mede_contraste_pelo_composto():
     assert not revisao.camadas
     c = regra(revisao, "contraste")
     assert c.estado == "alerta" and c.heuristica and c.detalhe.startswith("pelo composto, sem camadas: 2 silhuetas")
-    c = regra(revisao, "legibilidade")
-    assert c.estado == "alerta" and "silhuetas da frente" in c.detalhe and "some em 100%" in c.detalhe
     assert c.detalhe.endswith(DICA_CONTRASTE)
 
     revisao = revisar(isoluminante((20, 70, 30, 255)))  # verde escuro: o valor separa
-    assert regra(revisao, "contraste").estado == "ok" and regra(revisao, "legibilidade").estado == "ok"
+    assert regra(revisao, "contraste").estado == "ok"
 
 
 def test_pillow_com_alfa_parcial_sem_pixel_vazio():
@@ -177,7 +175,7 @@ def test_cena_sem_camadas_pula_o_que_precisa_delas():
         "contraste", "legibilidade", "pillow shading", "serrilhado", "escala", "laço"}
     revisao = revisar(faixas(32, 32, [50, 150]))  # duas faixas: o composto separa, mas nada é fechado
     assert regra(revisao, "contraste").estado == "ok"
-    for nome in ("pillow shading", "serrilhado"):  # a forma só se mede com as camadas
+    for nome in ("legibilidade", "pillow shading", "serrilhado"):  # a frente e a forma só se medem com as camadas
         c = regra(revisao, nome)
         assert c.estado == "pulada" and "se corta nas outras" in c.detalhe
     assert regra(revisao, "escala").estado == "pulada"  # chapado demais

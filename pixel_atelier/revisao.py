@@ -13,9 +13,8 @@ na aprovação final. Tudo é determinístico e só usa Pillow.
 O que entra:
 - cena (imagem opaca): com as camadas (a pasta `<cena>/` que `gerar` grava, achada sozinha, ou
   `camadas=`), dá para medir contraste entre camadas, frente contra o fundo e silhuetas; sem elas,
-  contraste e legibilidade saem das silhuetas que `silhuetas.separar` tira do composto (heurística:
-  mediana da borda entre elas e a borda das que chegam no pé da imagem), e pillow shading e
-  serrilhado pulam;
+  o contraste sai das silhuetas que `silhuetas.separar` tira do composto (heurística: mediana da
+  borda entre elas), e legibilidade, pillow shading e serrilhado pulam;
 - sprite (imagem com transparência): sozinho ou por cima de um `fundo`, em `posicao`;
 - imagem ampliada (blocos NxN, como `<cena>-3x.png`) volta para o tamanho real antes da revisão.
 
@@ -440,11 +439,10 @@ class _DoComposto:
 
     silhuetas: int
     borda: list[tuple[int, int, float]]  # a borda de todas contra o que encosta nelas
-    frente: list[tuple[int, int, float]]  # a borda das que chegam no pé da imagem: o mais perto, na vista lateral
 
 
 def _do_composto(cena: _Px) -> _DoComposto:
-    resultado = _DoComposto(0, [], [])
+    resultado = _DoComposto(0, [])
     for s in separar(cena.imagem):
         # tudo no recorte da silhueta com 1 pixel de folga: na beira da imagem o recorte para nela, igual
         x0, y0, x1, y1 = s.caixa
@@ -457,8 +455,6 @@ def _do_composto(cena: _Px) -> _DoComposto:
             continue
         resultado.silhuetas += 1
         resultado.borda.extend(borda)
-        if s.caixa[3] == cena.altura:
-            resultado.frente.extend(borda)
     return resultado
 
 
@@ -563,25 +559,6 @@ def _contraste_do_composto(composto: _DoComposto) -> Checagem:
     if mediana < CONTRASTE_CAMADAS:
         partes.append(DICA_CONTRASTE)
     return Checagem("contraste", "alerta" if mediana < CONTRASTE_CAMADAS else "ok", "; ".join(partes), True)
-
-
-def _legibilidade_do_composto(composto: _DoComposto) -> Checagem:
-    if not composto.borda:
-        return Checagem("legibilidade", "pulada", "sem camadas nem fundo, e o composto não separou silhuetas "
-                                                  "(passe camadas ou fundo)")
-    if not composto.frente:
-        return Checagem("legibilidade", "pulada", "sem camadas nem fundo, e nenhuma silhueta do composto chega no pé "
-                                                  "da imagem (passe camadas ou fundo)")
-    somem = [(x, y) for x, y, d in composto.frente if d < SOME]
-    fracao = len(somem) / len(composto.frente)
-    partes = [f"pelo composto: a borda das silhuetas da frente (as que chegam no pé da imagem) some em {_medida(fracao, SOME_MAX, '.0%')} "
-              f"(máx {SOME_MAX:.0%})"]
-    if fracao > SOME_MAX:
-        partes[0] += f", {_regiao(somem)}"
-        partes.append(DICA_CONTRASTE)
-    else:
-        partes.append("fundo apagado só se mede com as camadas")
-    return Checagem("legibilidade", "alerta" if fracao > SOME_MAX else "ok", "; ".join(partes), True)
 
 
 def _legibilidade(borda_frente: list[tuple[int, int, float]] | None, fundo: _Px | None,
@@ -1164,10 +1141,11 @@ def revisar(
 
     if tipo == "cena" and not lidas:  # só o composto: as silhuetas saem dele
         composto = _do_composto(alvo_px)
-        contraste, legibilidade = _contraste_do_composto(composto), _legibilidade_do_composto(composto)
-        # forma e sombreado não: no composto a silhueta se corta na que está na frente e na troca de material,
-        # e a luz de contorno cai noutra família; medido assim, dá alerta em cena boa
+        contraste = _contraste_do_composto(composto)
+        # legibilidade, forma e sombreado não: no composto a silhueta se corta na que está na frente e na troca
+        # de material, e a luz de contorno cai noutra família; medido assim, dá alerta em cena boa
         motivo = "sem camadas: no composto a silhueta se corta nas outras (passe camadas ou fundo)"
+        legibilidade = Checagem("legibilidade", "pulada", motivo, True)
         pillow = Checagem("pillow shading", "pulada", motivo, True)
         serrilhado = Checagem("serrilhado", "pulada", motivo, True)
     else:
