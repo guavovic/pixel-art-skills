@@ -1,0 +1,19 @@
+{
+  "$schema": "https://antigravity.google/schemas/v1/plugin.json",
+  "name": "pixel-atelier",
+  "version": "0.1.0",
+  "description": "Ateliê de pixel art para agentes de IA: técnica guardada no motor, arte saindo de receitas curtas.",
+  "author": {
+    "name": "Gustavo Victor",
+    "url": "https://github.com/guavovic"
+  },
+  "homepage": "https://github.com/guavovic/pixel-atelier",
+  "repository": "https://github.com/guavovic/pixel-atelier",
+  "license": "MIT",
+  "keywords": [
+    "pixel-art",
+    "mcp",
+    "parallax",
+    "paleta"
+  ]
+}

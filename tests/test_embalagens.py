@@ -46,6 +46,7 @@ def test_cada_embalagem_registra_o_servidor_e_leva_o_fluxo():
     servidores = {
         "embalagens/claude-code/.mcp.json": lambda d: d["mcpServers"],
         "embalagens/gemini/gemini-extension.json": lambda d: d["mcpServers"],
+        "embalagens/antigravity/mcp_config.json": lambda d: d["mcpServers"],
         "embalagens/cursor/.cursor/mcp.json": lambda d: d["mcpServers"],
         "embalagens/copilot/.vscode/mcp.json": lambda d: d["servers"],
         "embalagens/copilot/.github/mcp.json": lambda d: d["mcpServers"],
@@ -57,7 +58,8 @@ def test_cada_embalagem_registra_o_servidor_e_leva_o_fluxo():
     assert codex["mcp_servers"]["pixel-atelier"] == {"command": "python", "args": ["-m", "pixel_atelier", "mcp"]}
 
     texto = {"embalagens/claude-code/skills/pixel-atelier/SKILL.md", "embalagens/codex/.agents/skills/pixel-atelier/SKILL.md",
-             "embalagens/gemini/GEMINI.md", "embalagens/cursor/.cursor/rules/pixel-atelier.mdc",
+             "embalagens/gemini/GEMINI.md", "embalagens/antigravity/skills/pixel-atelier/SKILL.md",
+             "embalagens/cursor/.cursor/rules/pixel-atelier.mdc",
              "embalagens/copilot/.github/copilot-instructions.md"}
     for caminho in texto:
         conteudo = arquivos[caminho]
@@ -69,7 +71,8 @@ def test_cada_embalagem_registra_o_servidor_e_leva_o_fluxo():
 def test_skills_com_frontmatter_do_padrao():
     arquivos = embalar.montar()
     for caminho in ("embalagens/claude-code/skills/pixel-atelier/SKILL.md",
-                    "embalagens/codex/.agents/skills/pixel-atelier/SKILL.md"):
+                    "embalagens/codex/.agents/skills/pixel-atelier/SKILL.md",
+                    "embalagens/antigravity/skills/pixel-atelier/SKILL.md"):
         cabecalho = arquivos[caminho].split("---\n")[1]
         assert 'name: "pixel-atelier"' in cabecalho
         assert len(embalar.DESCRICAO_SKILL) <= 1024  # limite do padrão Agent Skills
