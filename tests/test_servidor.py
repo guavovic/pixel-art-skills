@@ -115,6 +115,10 @@ def test_revisar_responde_o_relatorio_em_texto(tmp_path):
     assert not erro and "ok laço: emenda" in texto and "marca" not in texto.splitlines()[-1]
     erro, texto = chamar(servidor, "revisar", imagem="saida/mcp.png", laco=False)
     assert not erro and "pulada laço: conferência do laço desligada" in texto
+    erro, texto = chamar(servidor, "revisar", imagem="saida/mcp.png", geracao="8-bits")
+    assert not erro and "limite 25" in texto and "cores por camada:" in texto
+    erro, texto = chamar(servidor, "revisar", imagem="saida/mcp.png", geracao=3)
+    assert erro and "a partir de 8" in texto
     erro, texto = chamar(servidor, "revisar", imagem="saida/mcp.png", fundo="../fora.png")
     assert erro and "fora da raiz" in texto
     erro, texto = chamar(servidor, "revisar", imagem="nada.png")

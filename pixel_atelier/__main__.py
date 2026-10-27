@@ -1,7 +1,7 @@
 """Linha de comando. Tudo responde em texto curto.
 
     python -m pixel_atelier gerar receita.json [--pasta saida]   # "-" lê a receita da entrada padrão
-    python -m pixel_atelier revisar cena.png [--fundo cena.png] [--estilo nome] [--laco]   # relatório em texto; laço pela marca do gerar; GIF: tempo por quadro
+    python -m pixel_atelier revisar cena.png [--fundo cena.png] [--estilo nome] [--laco] [--geracao 16]   # relatório em texto; laço pela marca do gerar; GIF: tempo por quadro
     python -m pixel_atelier formas                               # campos da receita e parâmetros de cada forma, com o padrão
     python -m pixel_atelier estilos                              # presets disponíveis
     python -m pixel_atelier registrar-estilo estilo.json [--nome nome] [--sobrescrever]
@@ -46,7 +46,8 @@ def _gerar(args: argparse.Namespace) -> int:
 def _revisar(args: argparse.Namespace) -> int:
     try:
         revisao = revisar(args.imagem, camadas=args.camadas, fundo=args.fundo,
-                          posicao=tuple(args.posicao) if args.posicao else None, estilo=args.estilo, laco=args.laco)
+                          posicao=tuple(args.posicao) if args.posicao else None, estilo=args.estilo, laco=args.laco,
+                          geracao=args.geracao)
     except (OSError, KeyError, ValueError) as erro:
         print(f"revisão não feita: {erro.args[0] if erro.args else erro}", file=sys.stderr)
         return 2
@@ -121,6 +122,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--estilo", help="confere as cores contra a paleta deste estilo")
     p.add_argument("--laco", action="store_const", const=True,
                    help="força a conferência da emenda (sem ela, vale a marca de laço que o gerar grava no PNG)")
+    p.add_argument("--geracao", help="limites de uma geração (8, 16, 32, moderno); sem ela, vale a do estilo "
+                                     "ou a marca que o gerar grava no PNG")
     p.set_defaults(funcao=_revisar)
 
     p = comandos.add_parser("formas", help="lista os campos da receita, as formas e os parâmetros")
