@@ -65,7 +65,7 @@ Com `animacao`, as camadas que já existem ganham movimento num laço que fecha 
 
 | Campo | Padrão | O que é |
 | --- | --- | --- |
-| `quadros` | `96` | quadros no laço (2 a 256); no tamanho grande o padrão encolhe para a folha caber em 4096 por lado (66 em 640x360, 15 em 1280x720) |
+| `quadros` | `96` | quadros no laço (2 a 256); até 1280x720 o padrão é 96, acima ele encolhe para caber na memória (42 em 1920x1080), e o pedido acima desse limite é recusado |
 | `duracao` | `100` | ms por quadro, de 10 em 10 (o GIF guarda centésimos) |
 | `voltas` | `4` | voltas que a camada mais perto dá na largura durante o laço (0 a 16); sem ele, 1 a cada 24 quadros, até 4 |
 
@@ -74,11 +74,17 @@ Cada camada é desenhada uma vez e anda inteira, para a esquerda. A mais perto d
 Com `saida` `"tudo"` ou `"composto"`, grava além dos PNGs:
 
 - `<cena>.gif` (ou `<cena>-Nx.gif`, ampliado pelo `ampliar`), para ver; uma paleta só, cor exata e alfa 0 ou 255 (acima de 256 cores o GIF sai com a paleta reduzida e o resumo avisa);
-- `<cena>-quadros.png`: os quadros lado a lado no tamanho real, quantos couberem em 4096 de largura por linha; a folha também fica com no máximo 4096 por lado;
+- `<cena>-quadros.png`: os quadros lado a lado no tamanho real, quantos couberem em 4096 de largura por linha; a folha fica com no máximo 4096 por lado e, quando os quadros não cabem numa só, eles seguem em páginas `<cena>-quadros-1.png`, `-2.png`... (640x360 com 96 quadros sai em 2 páginas, 1280x720 em 7);
 - `<cena>-quadros.json`, para o jogo:
 
 ```json
 {"cena": "vale", "folha": "vale-quadros.png", "quadros": 96, "duracao": 100, "quadro": [320, 180], "colunas": 12, "linhas": 8, "laco": true}
+```
+
+Em páginas, `folha` dá lugar a `folhas` (a lista na ordem) e `quadros_por_folha` (a última página pode ter menos); `linhas` é a de uma página cheia:
+
+```json
+{"cena": "vale", "quadros": 96, "duracao": 100, "quadro": [1280, 720], "colunas": 3, "linhas": 5, "laco": true, "folhas": ["vale-quadros-1.png", "...", "vale-quadros-7.png"], "quadros_por_folha": 15}
 ```
 
 O resumo ganha duas linhas:

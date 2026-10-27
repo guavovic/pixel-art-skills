@@ -220,8 +220,9 @@ def test_animacao_vazia_usa_os_padroes():
     assert (a.quadros, a.duracao, a.voltas) == (96, 100, 4)
 
 
-@pytest.mark.parametrize("tamanho, quadros, voltas", [([320, 180], 96, 4), ([640, 360], 66, 2), ([1280, 720], 15, 1)])
-def test_padrao_cabe_na_folha_e_voltas_seguem_os_quadros(tamanho, quadros, voltas):
+@pytest.mark.parametrize("tamanho, quadros, voltas", [([320, 180], 96, 4), ([640, 360], 96, 4), ([1280, 720], 96, 4),
+                                                     ([1920, 1080], 42, 1)])
+def test_padrao_cabe_na_memoria_e_voltas_seguem_os_quadros(tamanho, quadros, voltas):
     a = validar_receita({**VIVA, "tamanho": tamanho, "animacao": {}}).animacao
     assert (a.quadros, a.voltas) == (quadros, voltas)
     assert validar_receita({**VIVA, "animacao": {"quadros": 48}}).animacao.voltas == 2
@@ -242,11 +243,30 @@ def test_duracao_anda_de_10_em_10():
     assert erros == ["animacao.duracao anda de 10 em 10 ms (o GIF guarda centésimos), veio 85; use 80 ou 90"]
 
 
-def test_folha_acima_de_4096_e_recusada():
-    erros = erros_de({**VIVA, "tamanho": [1280, 720], "animacao": {"quadros": 48}})
-    assert erros == ["a folha de 48 quadros ficaria com 3840x11520 pixels e o máximo é 4096 por lado; "
+def test_quadros_acima_do_limite_de_memoria_sao_recusados():
+    erros = erros_de({**VIVA, "tamanho": [1920, 1080], "animacao": {"quadros": 48}})
+    assert erros == ["48 quadros de 1920x1080 passam do limite de memória da animação (42 quadros nesse tamanho); "
                      "reduza animacao.quadros ou tamanho"]
-    validar_receita({**VIVA, "tamanho": [1280, 720], "animacao": {"quadros": 15}})
+    validar_receita({**VIVA, "tamanho": [1280, 720], "animacao": {"quadros": 96}})
+
+
+def test_folha_que_passa_do_lado_maximo_segue_em_paginas(tmp_path, monkeypatch):
+    monkeypatch.setattr("pixel_atelier.receita.AMPLIADO_MAXIMO", 200)
+    resultado = gerar(VIVA, pasta=tmp_path)
+    dados = json.loads((tmp_path / "viva-quadros.json").read_text(encoding="utf-8"))
+    assert dados == {"cena": "viva", "quadros": 8, "duracao": 100, "quadro": [96, 64], "colunas": 2, "linhas": 3,
+                     "laco": True, "folhas": ["viva-quadros-1.png", "viva-quadros-2.png"], "quadros_por_folha": 6}
+    assert not (tmp_path / "viva-quadros.png").exists()
+    with Image.open(tmp_path / "viva-quadros-1.png") as primeira, Image.open(tmp_path / "viva-quadros-2.png") as segunda:
+        assert primeira.size == (192, 192) and segunda.size == (192, 64)
+        assert primeira.convert("RGBA").tobytes() == folha(resultado.quadros[:6], 2).tobytes()
+        assert segunda.convert("RGBA").tobytes() == folha(resultado.quadros[6:], 2).tobytes()
+    for pagina in ("viva-quadros-1.png", "viva-quadros-2.png"):
+        revisao = revisar(tmp_path / pagina)
+        tempo = next(c for c in revisao.checagens if c.regra == "tempo")
+        assert tempo.estado == "ok" and tempo.detalhe.startswith("8 quadros de 100 ms"), pagina
+        laco = next(c for c in revisao.checagens if c.regra == "laço dos quadros")
+        assert laco.estado == "ok", pagina
 
 
 # --- revisar e linha de comando ------------------------------------------------------------------

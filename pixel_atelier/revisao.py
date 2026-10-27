@@ -62,8 +62,8 @@ olhar valor e não matiz é o teste da imagem em escala de cinza.
 - linha 2:1 (heurística): escada de 6+ degraus (sem as pontas) com 85% ou mais de degraus de 2 é
   linha isométrica; degrau de 1 ou 3 entre dois de 2 é alerta (o serrilhado genérico não pega 2,1,2).
 
-- tempo (animação: GIF com mais de um quadro, ou a folha `<cena>-quadros.png` com o JSON de tempo
-  ao lado): cada quadro dura de 20 a 300 ms. Abaixo de 20 ms o navegador troca o tempo do GIF por
+- tempo (animação: GIF com mais de um quadro, ou a folha `<cena>-quadros.png`, ou uma página dela,
+  com o JSON de tempo ao lado): cada quadro dura de 20 a 300 ms. Abaixo de 20 ms o navegador troca o tempo do GIF por
   100 ms; acima de 300 ms (o quadro mais lento da tabela do guia) o movimento vira sequência de
   fotos. Imagem parada pula. A revisão das outras regras usa o primeiro quadro.
 - laço dos quadros (heurística, animação que repete): com os quadros reduzidos a 32 px de largura,
@@ -267,20 +267,39 @@ def _animacao(arquivo: Path) -> _Animada | None:
                 duracoes.append(int(quadro.info.get("duration", 0)))
             diferencas = None if toca_uma_vez else _diferencas(_quadros_do_gif(gif))
         return _Animada(primeiro, duracoes, arquivo, diferencas)
-    tempo = arquivo.with_suffix(".json")
-    if not tempo.is_file():
+    tempo = _tempo_da_folha(arquivo)
+    if tempo is None:
         return None
     try:
         dados = json.loads(tempo.read_text(encoding="utf-8"))
         largura, altura = dados["quadro"]
         quadros, duracao, colunas = int(dados["quadros"]), int(dados["duracao"]), int(dados["colunas"])
+        nomes = dados.get("folhas", [arquivo.name])
+        por_folha = int(dados.get("quadros_por_folha", quadros))
     except (ValueError, KeyError, TypeError):
         return None
-    folha = abrir(arquivo)
-    caixas = [((i % colunas) * largura, (i // colunas) * altura) for i in range(quadros)]
-    diferencas = _diferencas(folha.crop((x, y, x + largura, y + altura)) for x, y in caixas)
-    return _Animada(folha.crop((0, 0, largura, altura)), [duracao] * quadros,
-                    arquivo.parent / f"{dados.get('cena', arquivo.stem)}.png", diferencas)
+    folhas = [abrir(arquivo.parent / nome) for nome in nomes]
+
+    def recorte(i: int) -> Image.Image:
+        j = i % por_folha
+        x, y = (j % colunas) * largura, (j // colunas) * altura
+        return folhas[i // por_folha].crop((x, y, x + largura, y + altura))
+
+    diferencas = _diferencas(recorte(i) for i in range(quadros))
+    return _Animada(recorte(0), [duracao] * quadros, arquivo.parent / f"{dados.get('cena', arquivo.stem)}.png",
+                    diferencas)
+
+
+def _tempo_da_folha(arquivo: Path) -> Path | None:
+    """O JSON de tempo da folha `<cena>-quadros.png` ou de uma página dela, `<cena>-quadros-N.png`."""
+    candidatos = [arquivo.with_suffix(".json")]
+    base, _, pagina = arquivo.stem.rpartition("-")
+    if pagina.isdigit():
+        candidatos.append(arquivo.with_name(f"{base}.json"))
+    for candidato in candidatos:
+        if candidato.is_file():
+            return candidato
+    return None
 
 
 # --- medidas de apoio ----------------------------------------------------------------------------

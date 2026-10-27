@@ -17,7 +17,7 @@ from typing import Any
 
 from PIL import Image
 
-from .animacao import Animador, Movimento, folha, gravar_gif, gravar_tempo, tempo
+from .animacao import Animador, Movimento, gravar_gif, gravar_tempo, paginas, tempo
 from .cor import RGB, cores_usadas, rgb_para_hex
 from .formas import desenhar
 from .imagem import ampliar, compor, gravar_png
@@ -185,15 +185,18 @@ def _gravar(resultado: Resultado, pasta: Path) -> None:
 
 
 def _gravar_animacao(resultado: Resultado, pasta: Path) -> None:
-    """`<cena>.gif` (ou `<cena>-Nx.gif`, ampliado), `<cena>-quadros.png` e `<cena>-quadros.json`."""
+    """`<cena>.gif` (ou `<cena>-Nx.gif`, ampliado), `<cena>-quadros.png` (ou as páginas
+    `<cena>-quadros-1.png`, `-2.png`...) e `<cena>-quadros.json`."""
     r = resultado.receita
     a = r.animacao
     gif = pasta / (f"{r.cena}-{r.ampliar}x.gif" if r.ampliar > 1 else f"{r.cena}.gif")
     resultado.gif_exato = gravar_gif(resultado.quadros, gif, a.duracao, r.laco, escala=r.ampliar)
     dados = tempo(r.cena, a, (r.largura, r.altura), r.laco, f"{r.cena}-quadros.png")
-    arquivo_folha = pasta / dados["folha"]
-    gravar_png(folha(resultado.quadros, dados["colunas"]), arquivo_folha, r.laco)
+    nomes = dados.get("folhas", [dados.get("folha")])
+    arquivos_folha = [pasta / nome for nome in nomes]
+    for imagem, arquivo in zip(paginas(resultado.quadros, dados), arquivos_folha):
+        gravar_png(imagem, arquivo, r.laco)
     arquivo_tempo = pasta / f"{r.cena}-quadros.json"
     gravar_tempo(dados, arquivo_tempo)
-    resultado.arquivos_da_animacao = [gif, arquivo_folha, arquivo_tempo]
+    resultado.arquivos_da_animacao = [gif, *arquivos_folha, arquivo_tempo]
     resultado.arquivos.extend(resultado.arquivos_da_animacao)

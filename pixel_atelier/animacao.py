@@ -26,7 +26,7 @@ from PIL import Image, ImageChops
 
 from .formas import desenhar
 from .imagem import MARCA_LACO, ampliar, compor
-from .receita import Animacao, Camada, Receita, colunas_da_folha, parametros_da_forma
+from .receita import Animacao, Camada, Receita, colunas_da_folha, parametros_da_forma, quadros_por_folha
 
 CORES_GIF = 256
 COM_VENTO = ("nuvem", "nevoa")
@@ -159,18 +159,37 @@ def folha(quadros: list[Image.Image], colunas: int) -> Image.Image:
 
 
 def tempo(cena: str, animacao: Animacao, tamanho: tuple[int, int], laco: bool, arquivo_folha: str) -> dict:
-    """O JSON de tempo que acompanha a folha: o que o jogo precisa para tocar os quadros."""
+    """O JSON de tempo que acompanha a folha: o que o jogo precisa para tocar os quadros.
+
+    Quando os quadros não cabem numa folha de 4096 por lado, eles seguem em páginas
+    (`<cena>-quadros-1.png`, `-2.png`...): `folhas` lista as páginas na ordem e `quadros_por_folha`
+    diz quantos quadros cada uma guarda (a última pode ter menos).
+    """
     colunas = colunas_da_folha(animacao.quadros, tamanho[0])
-    return {
+    por_folha = quadros_por_folha(animacao.quadros, *tamanho)
+    dados = {
         "cena": cena,
         "folha": arquivo_folha,
         "quadros": animacao.quadros,
         "duracao": animacao.duracao,
         "quadro": list(tamanho),
         "colunas": colunas,
-        "linhas": -(-animacao.quadros // colunas),
+        "linhas": -(-por_folha // colunas),
         "laco": laco,
     }
+    if por_folha < animacao.quadros:
+        paginas = -(-animacao.quadros // por_folha)
+        base = arquivo_folha.removesuffix(".png")
+        del dados["folha"]
+        dados["folhas"] = [f"{base}-{i}.png" for i in range(1, paginas + 1)]
+        dados["quadros_por_folha"] = por_folha
+    return dados
+
+
+def paginas(quadros: list[Image.Image], dados: dict) -> list[Image.Image]:
+    """As folhas descritas em `dados` (de `tempo`), uma por página."""
+    por_folha = dados.get("quadros_por_folha", len(quadros))
+    return [folha(quadros[i:i + por_folha], dados["colunas"]) for i in range(0, len(quadros), por_folha)]
 
 
 def gravar_gif(quadros: list[Image.Image], destino: Path, duracao: int, laco: bool, escala: int = 1) -> bool:
