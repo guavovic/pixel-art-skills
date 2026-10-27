@@ -5,7 +5,7 @@ from typing import Any
 
 from PIL import Image
 
-from ..ruido import ruido_periodico
+from ..ruido import esticar, ruido_periodico
 from ._base import preparar, semente
 
 
@@ -38,6 +38,12 @@ def nevoa(
     ruido_b = ruido_periodico(semente(seed, 12), largura, 8, queda=0.3)
     y_centro, meia = centro * altura, max(1.0, espessura * altura)
 
+    def bruto(x: int, y: int) -> float:
+        return ruido_a(x) * 0.65 + ruido_b(x * 2 + y * 2) * 0.35
+
+    linhas_do_miolo = range(int(y_centro - meia / 2), int(y_centro + meia / 2) + 1)
+    esticado = esticar(bruto, largura, linhas_do_miolo)
+
     calculado: dict[tuple[int, int], float] = {}  # a névoa densa pede o mesmo campo da leve
 
     def campo(x: int, y: int) -> float:
@@ -51,8 +57,7 @@ def nevoa(
         if ate_o_chao and distancia > 0:
             distancia = 0.0
         faixa = max(0.0, 1 - abs(distancia))
-        v = (ruido_a(x) * 0.5 + 0.5) * 0.65 + (ruido_b(x * 2 + y * 2) * 0.5 + 0.5) * 0.35
-        return faixa * max(0.0, v * (0.4 + densidade) - 0.25)
+        return faixa * max(0.0, esticado(x, y) * (0.4 + densidade) - 0.25)
 
     leve = tela.pontilhar(campo, escala)
     densa = tela.pontilhar(lambda x, y: campo(x, y) - 0.35, escala)

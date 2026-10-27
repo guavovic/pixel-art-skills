@@ -28,6 +28,17 @@ def ruido_periodico(seed: int, periodo: float, harmonicos: int = 6, queda: float
     return valor
 
 
+def esticar(campo: Callable[[int, int], float], largura: int, linhas: range) -> Callable[[int, int], float]:
+    """Estica `campo` para ir de 0 a 1 nas `linhas` medidas.
+
+    O alcance do ruído muda com a seed: medido no miolo da faixa, um corte por densidade vale igual para todas.
+    """
+    valores = [campo(x, y) for y in linhas for x in range(largura)]
+    menor = min(valores)
+    alcance = max(valores) - menor or 1.0
+    return lambda x, y: (campo(x, y) - menor) / alcance
+
+
 def hash01(x: int, y: int, seed: int = 0) -> float:
     """Número de 0 a 1 que depende só de (x, y, seed). Serve de ruído branco reproduzível."""
     n = (x * 374761393 + y * 668265263 + seed * 1442695041) & 0xFFFFFFFF
