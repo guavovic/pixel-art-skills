@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "pixel-atelier": {
+      "command": "python",
+      "args": [
+        "-m",
+        "pixel_atelier",
+        "mcp"
+      ]
+    }
+  }
+}

@@ -34,7 +34,7 @@ Ateliê de pixel art para agentes de IA. O agente escreve uma receita JSON curta
 - **Gerações:** a mesma cena em 8, 16 ou 32 bits ou moderna (640x360), com `"geracao": 16` na receita: resolução, cores, rampas, sombreamento, contorno e textura de cada época, e o `revisar` confere os limites dela.
 - **Estilo a partir de uma referência:** o `ref` lê a imagem uma vez e grava paleta e rampas como preset com nome; depois a receita usa só o nome.
 - **Guia de pixel art por capítulo:** o agente lê só o assunto da vez, e cada regra do `revisar` aponta para o capítulo que a explica.
-- **Qualquer agente:** servidor MCP local e embalagens prontas para Claude Code, Codex, Gemini CLI, Cursor e GitHub Copilot.
+- **Qualquer agente:** servidor MCP local e embalagens prontas para Claude Code, Codex, Gemini CLI, Antigravity CLI, Cursor e GitHub Copilot.
 
 ## Instalação
 
@@ -56,6 +56,7 @@ No Claude Code, o plugin entra por dentro de uma sessão:
 | Claude Code | plugin com o servidor MCP e uma skill | testado de ponta a ponta (#8) |
 | OpenAI Codex | skill e servidor em `.codex/config.toml` | formato validado pela documentação e servidor testado com cliente MCP; teste de ponta a ponta pendente |
 | Gemini CLI | extensão com `gemini-extension.json` e `GEMINI.md` | formato validado pela documentação e servidor testado com cliente MCP; teste de ponta a ponta pendente |
+| Antigravity CLI | plugin com `plugin.json`, `mcp_config.json` e uma skill | formato validado pela documentação e servidor testado com cliente MCP; teste de ponta a ponta pendente |
 | Cursor | regra em `.cursor/rules/` e servidor em `.cursor/mcp.json` | formato validado pela documentação e servidor testado com cliente MCP; teste de ponta a ponta pendente |
 | GitHub Copilot | `copilot-instructions.md` e servidor em `mcp.json` (VS Code e Copilot CLI) | formato validado pela documentação e servidor testado com cliente MCP; teste de ponta a ponta pendente |
 

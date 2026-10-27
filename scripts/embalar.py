@@ -10,6 +10,7 @@ Saída (nunca editada à mão, sempre regenerada por este script):
     embalagens/claude-code/         plugin do Claude Code (.claude-plugin/plugin.json, .mcp.json, skill)
     embalagens/codex/               skill em .agents/skills e servidor em .codex/config.toml
     embalagens/gemini/              extensão do Gemini CLI (gemini-extension.json, GEMINI.md)
+    embalagens/antigravity/         plugin do Antigravity CLI (plugin.json, mcp_config.json, skill)
     embalagens/cursor/              regra em .cursor/rules e servidor em .cursor/mcp.json
     embalagens/copilot/             .github/copilot-instructions.md, servidor do VS Code em .vscode/mcp.json
                                     e do Copilot CLI em .github/mcp.json
@@ -39,7 +40,7 @@ REPO = "https://github.com/guavovic/pixel-atelier"
 AUTOR = {"name": "Gustavo Victor", "url": "https://github.com/guavovic"}
 INSTALAR = f'pip install "pixel-atelier[mcp] @ git+{REPO}"'
 # Interpretador que sobe o servidor (`python -m pixel_atelier mcp`), igual em todas as embalagens: nenhuma das
-# cinco ferramentas tem campo por sistema no servidor MCP, então vale o nome que existe em mais lugares.
+# ferramentas tem campo por sistema no servidor MCP, então vale o nome que existe em mais lugares.
 # `python` é o comando do Windows (o instalador do python.org e o venv do Windows não trazem python3; o
 # `python3` do gerenciador de instalação "não é recomendado", docs.python.org/3/using/windows.html) e, pela
 # PEP 394, "sempre disponível" dentro de um venv ativado em qualquer sistema. Os exemplos de servidor Python
@@ -229,6 +230,18 @@ def gemini(f: dict) -> dict[str, str]:
     }
 
 
+def antigravity(f: dict) -> dict[str, str]:
+    base = f"{SAIDA}/antigravity"
+    plugin = {"$schema": "https://antigravity.google/schemas/v1/plugin.json", "name": f["nome"],
+              "version": f["versao"], "description": f["descricao"], "author": AUTOR, "homepage": REPO,
+              "repository": REPO, "license": "MIT", "keywords": ["pixel-art", "mcp", "parallax", "paleta"]}
+    return {
+        f"{base}/plugin.json": json_texto(plugin),
+        f"{base}/mcp_config.json": json_texto({"mcpServers": servidor_stdio(f, None)}),
+        f"{base}/skills/{f['nome']}/SKILL.md": skill(f),
+    }
+
+
 def cursor(f: dict) -> dict[str, str]:
     base = f"{SAIDA}/cursor/.cursor"
     regra = {"description": DESCRICAO_SKILL, "alwaysApply": False}
@@ -267,17 +280,18 @@ Antes de qualquer uma, instale o servidor:
 | `claude-code/` | Claude Code | plugin: `.claude-plugin/plugin.json`, `.mcp.json` e a skill `skills/{nome}/` | `/plugin install {nome} --marketplace guavovic/pixel-atelier`, ou em dois passos `/plugin marketplace add guavovic/pixel-atelier` e `/plugin install {nome}@{nome}` (o marketplace fica em `.claude-plugin/marketplace.json` na raiz do repositório); no clone, `claude --plugin-dir embalagens/claude-code` |
 | `codex/` | OpenAI Codex | skill em `.agents/skills/{nome}/` e servidor em `.codex/config.toml` | as duas pastas na raiz do projeto (o `.codex/config.toml` do projeto só vale em projeto confiável), ou a skill em `~/.agents/skills/` e o trecho `[mcp_servers.{nome}]` em `~/.codex/config.toml` |
 | `gemini/` | Gemini CLI | extensão: `gemini-extension.json` (com o servidor) e `GEMINI.md` | `gemini extensions install <clone>/embalagens/gemini` (ou `gemini extensions link` para acompanhar o clone); a extensão fica em `~/.gemini/extensions/{nome}/`, com o nome do manifesto, então a pasta de origem pode se chamar `gemini` |
+| `antigravity/` | Antigravity CLI | plugin: `plugin.json`, `mcp_config.json` (com o servidor) e a skill `skills/{nome}/` | `agy plugin install <clone>/embalagens/antigravity`; o CLI copia para `~/.gemini/antigravity-cli/plugins/{nome}/`, com o nome do manifesto |
 | `cursor/` | Cursor | regra `.cursor/rules/{nome}.mdc`, aplicada quando o agente acha que o pedido pede, e servidor em `.cursor/mcp.json` | a pasta `.cursor/` na raiz do projeto, ou o servidor em `~/.cursor/mcp.json` |
-| `copilot/` | GitHub Copilot | `.github/copilot-instructions.md`, servidor do VS Code em `.vscode/mcp.json` e do Copilot CLI em `.github/mcp.json` | as duas pastas na raiz do repositório; se ele já tiver `copilot-instructions.md` ou `.github/mcp.json`, junte ao que existe |
+| `copilot/` | GitHub Copilot | `.github/copilot-instructions.md`, servidor do VS Code em `.vscode/mcp.json` e do Copilot CLI em `.github/mcp.json` | as duas pastas na raiz do repositório; se ele já tiver `copilot-instructions.md` ou `.github/mcp.json`, junte ao que existe. No Copilot CLI, um `.mcp.json` na mesma pasta ganha do `.github/mcp.json`; para valer em todo projeto, o trecho de `mcpServers` vai em `~/.copilot/mcp-config.json` |
 
 Toda embalagem sobe o servidor com `{python} -m {modulo} mcp`, sem depender do comando `{nome}` no PATH. É a ferramenta que roda esse `{python}`, com o PATH dela, então ele precisa ser o do ambiente onde o pacote foi instalado: instale fora de venv, abra a ferramenta com o venv ativado, ou troque `command` no arquivo de MCP pelo caminho absoluto do interpretador (`...\\.venv\\Scripts\\python.exe` no Windows, `.../.venv/bin/python` no Linux e no macOS). `{python}` é o nome que o Windows e todo venv ativado têm; num Linux ou macOS fora de venv, onde só existe `python3`, troque por `python3`. Com `pipx` o pacote fica num ambiente à parte que o `{python}` não vê: nesse caso use `"command": "{nome}"` e tire `-m` e `{modulo}` de `args`.
 
-O servidor recebe a pasta do projeto pela variável de cada ferramenta (`${{CLAUDE_PROJECT_DIR}}`, `${{workspacePath}}`, `${{workspaceFolder}}`). O Codex e o Copilot CLI não documentam variável de pasta: neles o servidor sobe sem `--raiz` e usa a pasta em que a ferramenta o abre (no Codex, a pasta da sessão, conferido no código do Codex).
+O servidor recebe a pasta do projeto pela variável de cada ferramenta (`${{CLAUDE_PROJECT_DIR}}`, `${{workspacePath}}`, `${{workspaceFolder}}`). O Codex, o Copilot CLI e o Antigravity CLI não documentam variável de pasta: neles o servidor sobe sem `--raiz` e usa a pasta em que a ferramenta o abre (no Codex, a pasta da sessão, conferido no código do Codex). Se a ferramenta abrir o servidor em outra pasta, acrescente `"--raiz", "<pasta do projeto>"` em `args`.
 
 | Ferramenta | Situação |
 |---|---|
 | Claude Code | testado de ponta a ponta (#8) |
-| OpenAI Codex, Gemini CLI, Cursor, GitHub Copilot | formato validado pela documentação (`tests/test_formato_embalagens.py`) e servidor testado com cliente MCP; teste de ponta a ponta pendente |
+| OpenAI Codex, Gemini CLI, Antigravity CLI, Cursor, GitHub Copilot | formato validado pela documentação (`tests/test_formato_embalagens.py`) e servidor testado com cliente MCP; teste de ponta a ponta pendente |
 """
 
 
@@ -285,7 +299,7 @@ def montar(raiz: Path = RAIZ) -> dict[str, str]:
     """Todos os arquivos gerados, caminho relativo à raiz do repositório para o conteúdo."""
     f = fonte(raiz)
     arquivos: dict[str, str] = {}
-    for embalagem in (claude_code, codex, gemini, cursor, copilot):
+    for embalagem in (claude_code, codex, gemini, antigravity, cursor, copilot):
         arquivos.update(embalagem(f))
     arquivos[f"{SAIDA}/README.md"] = LEIAME.format(aviso=AVISO, instalar=INSTALAR, nome=f["nome"], python=PYTHON,
                                                    modulo=f["modulo"])

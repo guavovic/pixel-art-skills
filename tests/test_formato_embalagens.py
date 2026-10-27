@@ -86,6 +86,7 @@ CAMPOS_SKILL = {"name", "description", "license", "compatibility", "metadata", "
 @pytest.mark.parametrize("caminho", [
     f"embalagens/claude-code/skills/{NOME}/SKILL.md",
     f"embalagens/codex/.agents/skills/{NOME}/SKILL.md",
+    f"embalagens/antigravity/skills/{NOME}/SKILL.md",
 ])
 def test_skill_no_padrao_agent_skills(caminho):
     campos = frontmatter(caminho)
@@ -221,6 +222,42 @@ def test_gemini_extension_json():
     assert f"{base}/{contexto}" in ARQUIVOS and ARQUIVOS[f"{base}/{contexto}"].strip()
 
 
+# ---------------------------------------------------------------- Antigravity CLI
+# Plugin: https://antigravity.google/docs/plugins : pasta com plugin.json (obrigatório), mcp_config.json,
+# skills/<nome>/SKILL.md, agents/ e rules/; `name` obrigatório no CLI (`agy plugin install`), ^[a-zA-Z0-9_-]+$.
+# Chaves do manifesto: schema https://antigravity.google/schemas/v1/plugin.json (additionalProperties false).
+# MCP: https://antigravity.google/docs/mcp : mcpServers; stdio com command obrigatório, args, env, cwd e as
+# opções comuns disabled, enabledTools, disabledTools, timeoutSeconds. Nenhuma variável de pasta documentada.
+# Skill: https://antigravity.google/docs/skills : frontmatter com description obrigatória e name opcional.
+# Consultado em 27/10/2026.
+CAMPOS_ANTIGRAVITY = {"$schema", "author", "description", "disabled", "displayName", "display_name", "extensions",
+                      "homepage", "keywords", "license", "logo", "name", "repository", "skills", "source",
+                      "sourcePath", "source_path", "suggestedPrompts", "suggested_prompts", "version"}
+CHAVES_SERVIDOR_ANTIGRAVITY = {"command", "args", "env", "cwd", "disabled", "enabledTools", "disabledTools",
+                               "timeoutSeconds"}
+
+
+def test_antigravity_plugin_json():
+    base = "embalagens/antigravity"
+    plugin = json_de(f"{base}/plugin.json")
+    assert set(plugin) <= CAMPOS_ANTIGRAVITY, set(plugin) - CAMPOS_ANTIGRAVITY
+    assert plugin["$schema"] == "https://antigravity.google/schemas/v1/plugin.json"
+    assert plugin["name"] == NOME and re.fullmatch(r"[a-zA-Z0-9_-]+", plugin["name"])
+    for campo in ("version", "description", "homepage", "repository", "license"):
+        assert isinstance(plugin[campo], str) and plugin[campo], campo
+    assert set(plugin["author"]) <= {"name", "email", "url"}
+    assert all(isinstance(k, str) for k in plugin["keywords"])
+    assert f"{base}/skills/{NOME}/SKILL.md" in ARQUIVOS
+
+
+def test_antigravity_mcp_config_json():
+    config = json_de("embalagens/antigravity/mcp_config.json")
+    assert set(config) == {"mcpServers"}
+    servidor = config["mcpServers"][NOME]
+    confere_servidor_stdio(servidor, CHAVES_SERVIDOR_ANTIGRAVITY, {"command"}, "mcp_config.json")
+    assert not variaveis(servidor), "o Antigravity não documenta variável de pasta"
+
+
 # ---------------------------------------------------------------- Cursor
 # Regras: https://cursor.com/docs/context/rules : .cursor/rules/*.mdc (um .md ali é ignorado), frontmatter
 # description, globs, alwaysApply. alwaysApply false + description e sem globs = "Apply Intelligently".
@@ -255,9 +292,11 @@ def test_cursor_mcp_json():
 # `servers` (e `inputs`, `sandbox` opcionais); stdio com type "stdio" e command obrigatórios, args, env,
 # envFile, cwd opcionais; nome sem espaço nem caractere especial. Variáveis predefinidas do VS Code:
 # https://code.visualstudio.com/docs/reference/variables-reference
-# Copilot CLI: https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/add-mcp-servers :
-# não lê .vscode/mcp.json; lê .mcp.json e .github/mcp.json com mcpServers, servidor local com
-# type "local", command, args, env e tools (padrão "*"). Nenhuma variável de pasta documentada.
+# Copilot CLI: https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/add-mcp-servers
+# (reconsultado em 27/10/2026): não lê .vscode/mcp.json; no projeto lê .mcp.json (da pasta atual até a raiz do
+# repositório, ganha do .github/mcp.json na mesma pasta) e .github/mcp.json (o compartilhado, que vai no
+# repositório); no usuário, ~/.copilot/mcp-config.json. mcpServers, servidor local com type "local", command,
+# args, env e tools (padrão "*"). Nenhuma variável de pasta documentada.
 VARIAVEIS_VSCODE = {"workspaceFolder", "workspaceFolderBasename", "userHome", "cwd", "pathSeparator", "/"}
 
 
