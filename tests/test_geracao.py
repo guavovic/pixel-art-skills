@@ -231,3 +231,10 @@ def test_musgo_da_rocha_no_game_boy_sem_pillow():
     resultado = gerar(receita)
     revisao = revisar(resultado.composto, camadas=[c.imagem for c in resultado.camadas], estilo=resultado.receita.estilo)
     assert regra(revisao, "pillow shading").estado == "ok"
+
+
+def test_cena_noturna_sem_camadas_nao_acusa_legibilidade_pelo_composto():
+    revisao = revisar(EXEMPLOS / "metroidvania-noturno.png")
+    assert not revisao.camadas
+    assert regra(revisao, "legibilidade").estado == "pulada"
+    assert regra(revisao, "contraste").estado != "pulada"

@@ -13,8 +13,8 @@ de duas silhuetas só se tocam na beira. Então:
 Isso separa material de material (céu, nuvem, mata, tronco, chão). Duas camadas pintadas com
 cores quase iguais viram uma silhueta só, então o que falta em contraste ali não aparece: a
 separação erra para o lado de não acusar. Por isso tudo que sai daqui é heurística, e só serve
-para valor (contraste e legibilidade): a forma de cada silhueta se corta na que está na frente e
-na troca de material, então pillow shading e serrilhado continuam pedindo as camadas.
+para o contraste entre elas: a forma de cada silhueta se corta na que está na frente e na troca de
+material, então legibilidade, pillow shading e serrilhado continuam pedindo as camadas.
 """
 from __future__ import annotations
 
