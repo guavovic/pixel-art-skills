@@ -145,3 +145,18 @@ def test_profundidade_aproxima_da_atmosfera():
         return sum(n * sum((c[i] - alvo[i]) ** 2 for i in range(3)) ** 0.5 for n, c in cores) / total
 
     assert distancia_media(0.9) < distancia_media(0.0)
+
+
+@pytest.mark.parametrize("densidade", [0.1, 0.2, 0.3])
+@pytest.mark.parametrize("seed", range(12))
+def test_nuvem_em_fiapo_rala_desenha_em_qualquer_seed(seed, densidade):
+    imagem = gerar("nuvem", seed=seed, tipo="fiapo", densidade=densidade)
+    assert imagem.getchannel("A").getbbox() is not None
+
+
+def test_nuvem_em_fiapo_enche_mais_com_mais_densidade():
+    def acesos(densidade: float) -> int:
+        alfa = gerar("nuvem", seed=2, tipo="fiapo", densidade=densidade).getchannel("A")
+        return alfa.histogram()[255]
+
+    assert 0 < acesos(0.1) < acesos(0.3) < acesos(0.6)
