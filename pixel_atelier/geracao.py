@@ -11,13 +11,15 @@ cada número estão no capítulo `geracoes` do guia.
 """
 from __future__ import annotations
 
+import itertools
 import math
 from dataclasses import dataclass
 
-from .cor import RGB, cor_mais_proxima, distancia2, hex_para_rgb
+from .cor import RAMPA_MATIZ, RGB, cor_mais_proxima, distancia2, hex_para_rgb, mudanca_de_matiz
 
 MODERNO = 64
 NOMES = {"8-bits": 8, "16-bits": 16, "32-bits": 32, "moderno": MODERNO, "hd": MODERNO}
+FOLGA_DA_GRADE = 2  # candidata da grade até 2 vezes a distância (ao quadrado) da cor mais perto
 
 # NES (2C02), como a paleta "Nintendo Entertainment System" do Lospec
 CORES_NES = tuple(hex_para_rgb(c) for c in (
@@ -124,6 +126,43 @@ def na_grade(cor: RGB, grade: str) -> RGB:
     if grade == "15-bits":
         return tuple((q << 3) | (q >> 2) for q in (round(v * 31 / 255) for v in cor))  # type: ignore[return-value]
     return tuple(cor)  # type: ignore[return-value]
+
+
+def _candidatas(cor: RGB, grade: str) -> list[RGB]:
+    """Cores da grade perto de `cor`: a mais perto e as que ficam até `FOLGA_DA_GRADE` vezes a distância dela."""
+    if grade == "nes":
+        limite = distancia2(cor, cor_mais_proxima(cor, CORES_NES)) * FOLGA_DA_GRADE
+        return [c for c in CORES_NES if distancia2(cor, c) <= limite]
+    if grade == "15-bits":
+        lados = [{math.floor(v * 31 / 255), math.ceil(v * 31 / 255)} for v in cor]
+        return [tuple((q << 3) | (q >> 2) for q in canais) for canais in itertools.product(*lados)]  # type: ignore[misc]
+    return [cor]
+
+
+def _guarda_o_matiz(rampa: list[RGB], sentido: float) -> bool:
+    muda = mudanca_de_matiz(rampa)
+    return muda is not None and abs(muda[0]) >= RAMPA_MATIZ and muda[0] * sentido > 0
+
+
+def matiz_na_grade(rampa: list[RGB], grade: str) -> list[RGB]:
+    """A rampa do tema pronta para a grade, sem perder a mudança de matiz.
+
+    Fica igual quando a cor mais perto da grade guarda o matiz (a paleta leva cada tom para ela).
+    Se ali a rampa passa a mudar menos de `RAMPA_MATIZ`, como o cristal azul que o NES põe numa
+    coluna só, vale a combinação de candidatas (`_candidatas`) que muda o matiz no mesmo sentido do
+    tema com a menor distância somada; sem nenhuma assim, fica igual.
+    """
+    tema = mudanca_de_matiz(rampa)
+    perto = mudanca_de_matiz([na_grade(c, grade) for c in rampa])
+    tema_muda = tema is not None and abs(tema[0]) >= RAMPA_MATIZ
+    grade_parou = perto is not None and abs(perto[0]) < RAMPA_MATIZ
+    if not (tema_muda and grade_parou):
+        return rampa
+    combinacoes = (list(r) for r in itertools.product(*(_candidatas(c, grade) for c in rampa)))
+    opcoes = [r for r in combinacoes if _guarda_o_matiz(r, tema[0])]
+    if not opcoes:
+        return rampa
+    return min(opcoes, key=lambda r: sum(distancia2(a, b) for a, b in zip(rampa, r)))
 
 
 def reduzir_paleta(cores: list[RGB], limite: int) -> list[RGB]:

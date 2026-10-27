@@ -60,7 +60,7 @@ olhar valor e não matiz é o teste da imagem em escala de cinza.
   degradê que não volta) ela é.
 - matiz da rampa (precisa do `estilo`): cada rampa do estilo que a imagem usa, com 3 ou mais cores de
   saturação 0,1+, muda pelo menos 3 graus de matiz do tom escuro ao claro. Rampa toda abaixo de
-  valor 0,25 (silhueta noturna) fica de fora.
+  valor 0,25 (silhueta noturna) fica de fora. Com geração, a rampa do tema (antes da grade) também.
 - contorno preto: contorno é a borda com 85% ou mais numa cor só, diferente do miolo. Alerta quando
   todos os contornos são preto puro (canal até 8).
 - anti-alias (heurística): meio-tom na borda (alfa parcial, ou valor entre o de dentro e o de trás a
@@ -86,7 +86,6 @@ contraste e das silhuetas, porque ela é transparente de propósito.
 """
 from __future__ import annotations
 
-import colorsys
 import json
 import math
 import sys
@@ -97,7 +96,8 @@ from typing import Any, Iterable, Sequence
 
 from PIL import Image, ImageChops, ImageStat
 
-from .cor import QUASE_IGUAL, distancia2, luminancia, rgb_para_hex
+from .cor import (QUASE_IGUAL, RAMPA_ESCURA, RAMPA_MATIZ, RAMPA_SATURACAO, distancia2, luminancia, mudanca_de_matiz,  # noqa: F401
+                  rgb_para_hex)
 from .estilo import Estilo, carregar_estilo
 from .geracao import Geracao, geracao as da_geracao
 from .imagem import abrir, compor, escala_indicada, escala_inteira, marca_de_geracao, marca_de_laco, reduzir, vizinho
@@ -130,9 +130,8 @@ LACO_EMENDA = 3  # emenda acima disso vezes a média entre colunas vizinhas (e a
 LACO_FOLGA = 1.05  # e acima da maior com 5% de folga: tronco inclinado cruzando a emenda põe as colunas dali no mesmo nível
 LACO_QUADROS = 1.1  # do último quadro para o primeiro acima disso vezes a maior troca entre quadros seguidos: pulo (o laço certo chega a 1,03)
 LACO_LADO = 32  # px; a conta do laço roda nos quadros reduzidos a essa largura, onde o passo grande não satura
-RAMPA_MATIZ = 3  # graus do escuro ao claro: abaixo disso é só o arredondamento do RGB, a rampa só muda o brilho
-RAMPA_SATURACAO = 0.1  # cor menos saturada que isso é quase cinza: na grade de 15 bits o matiz dela é só arredondamento
-RAMPA_ESCURA = 0.25  # rampa toda abaixo desse valor (silhueta noturna): no escuro o matiz quase não aparece
+# RAMPA_MATIZ (3°), RAMPA_SATURACAO (0,1) e RAMPA_ESCURA (0,25) ficam em `cor`: a grade da geração usa os
+# mesmos números para guardar o matiz da rampa
 CONTORNO_UMA_COR = 0.85  # fração da borda numa cor só para ela contar como contorno
 PRETO = 8  # canal até isso (#080808): preto puro
 AA_LADO = 0.8  # fração da borda em meio-tom, em cada um dos 4 lados, para ser anti-alias em volta da forma
@@ -895,14 +894,11 @@ def _detalhada(janela: bytes, lado: int = JANELA) -> bool:
 
 # --- regras do guia: rampa, contorno, anti-alias e linha 2:1 -------------------------------------
 
-def _hsv(cor: Sequence[int]) -> tuple[float, float]:
-    """(matiz em graus, saturação de 0 a 1)."""
-    h, s, _ = colorsys.rgb_to_hsv(cor[0] / 255, cor[1] / 255, cor[2] / 255)
-    return h * 360, s
-
-
 def _rampa_matiz(alvo: Image.Image, estilo: Estilo | None) -> Checagem:
-    """Rampas do estilo que a imagem usa: o matiz precisa andar do escuro ao claro."""
+    """Rampas do estilo que a imagem usa: o matiz precisa andar do escuro ao claro.
+
+    Com geração, a rampa do tema (antes da grade) também precisa andar: o arredondamento da grade
+    sozinho passa de 3° e esconderia uma rampa que só muda o brilho."""
     if estilo is None:
         return Checagem("matiz da rampa", "pulada", "sem estilo (passe estilo: as rampas vêm dele)")
     px = alvo.load()
@@ -916,16 +912,18 @@ def _rampa_matiz(alvo: Image.Image, estilo: Estilo | None) -> Checagem:
     for papel, rampa in estilo.rampas.items():
         if sum(c in onde for c in set(rampa)) < 2:
             continue  # rampa que a imagem não usa
-        if max(luminancia(c) for c in rampa) < RAMPA_ESCURA:
-            continue
-        cores = sorted({c for c in rampa if _hsv(c)[1] >= RAMPA_SATURACAO}, key=luminancia)
-        if len(cores) < 3:
-            continue  # rampa quase cinza ou curta demais para ter matiz
-        muda = abs((_hsv(cores[-1])[0] - _hsv(cores[0])[0] + 180) % 360 - 180)
+        na_imagem = mudanca_de_matiz(rampa)
+        if na_imagem is None:
+            continue  # rampa escura, quase cinza ou curta demais para ter matiz
+        muda, escura, clara = abs(na_imagem[0]), na_imagem[1], na_imagem[2]
         conferidas.append((papel, muda))
+        x, y = next(onde[c] for c in rampa if c in onde)
+        no_tema = mudanca_de_matiz(estilo.rampas_do_tema.get(papel, ()))
         if muda < RAMPA_MATIZ:
-            x, y = next(onde[c] for c in rampa if c in onde)
-            sem.append(f"{papel} {rgb_para_hex(cores[0])} > {rgb_para_hex(cores[-1])} muda {muda:.0f}°, em ({x},{y})")
+            sem.append(f"{papel} {rgb_para_hex(escura)} > {rgb_para_hex(clara)} muda {muda:.0f}°, em ({x},{y})")
+        elif no_tema is not None and abs(no_tema[0]) < RAMPA_MATIZ:
+            sem.append(f"{papel} {rgb_para_hex(no_tema[1])} > {rgb_para_hex(no_tema[2])} muda {abs(no_tema[0]):.0f}° "
+                       f"no tema (a grade dá {muda:.0f}°), em ({x},{y})")
     if not conferidas:
         return Checagem("matiz da rampa", "pulada", f"nenhuma rampa de {estilo.nome} com 3+ cores saturadas na imagem")
     if sem:

@@ -17,6 +17,9 @@ RGB = tuple[int, int, int]
 AMARELO = 60 / 360  # para onde a luz puxa o matiz
 AZUL = 240 / 360  # para onde a sombra puxa o matiz
 QUASE_IGUAL = 4  # distância RGB abaixo disso: duas cores que o olho não separa
+RAMPA_MATIZ = 3  # graus do escuro ao claro: abaixo disso é só o arredondamento do RGB, a rampa só muda o brilho
+RAMPA_SATURACAO = 0.1  # cor menos saturada que isso é quase cinza: na grade de 15 bits o matiz dela é só arredondamento
+RAMPA_ESCURA = 0.25  # rampa toda abaixo desse valor (silhueta noturna): no escuro o matiz quase não aparece
 
 
 def hex_para_rgb(valor: str) -> RGB:
@@ -126,6 +129,22 @@ def gerar_rampa(
         r, g, b = colorsys.hsv_to_rgb(hh, ss, vv)
         rampa.append((round(r * 255), round(g * 255), round(b * 255)))
     return rampa
+
+
+def mudanca_de_matiz(rampa: Iterable[Sequence[int]]) -> tuple[float, RGB, RGB] | None:
+    """(graus com sinal, tom escuro, tom claro): quanto o matiz anda do escuro ao claro, só nas cores com
+    saturação `RAMPA_SATURACAO` ou mais. None na rampa toda abaixo de `RAMPA_ESCURA` ou com menos de 3
+    cores saturadas, onde o matiz não conta."""
+    rampa = [tuple(c) for c in rampa]
+    if not rampa or max(luminancia(c) for c in rampa) < RAMPA_ESCURA:
+        return None
+    hsv = {c: colorsys.rgb_to_hsv(c[0] / 255, c[1] / 255, c[2] / 255) for c in rampa}
+    cores = sorted((c for c in hsv if hsv[c][1] >= RAMPA_SATURACAO), key=luminancia)
+    if len(cores) < 3:
+        return None
+    escura, clara = cores[0], cores[-1]
+    graus = ((hsv[clara][0] - hsv[escura][0]) * 360 + 180) % 360 - 180
+    return graus, escura, clara  # type: ignore[return-value]
 
 
 @lru_cache(maxsize=64)
