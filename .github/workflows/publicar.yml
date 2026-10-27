@@ -1,0 +1,49 @@
+# Publica o pacote no PyPI quando uma release é publicada no GitHub, por Trusted Publishing (sem token guardado).
+# No PyPI, o publicador aponta para este repositório, este arquivo (publicar.yml) e o ambiente "pypi".
+name: Publicar no PyPI
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  construir:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Conferir a tag contra a versão do pyproject.toml
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          versao=$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])")
+          if [ "${TAG#v}" != "$versao" ]; then
+            echo "tag $TAG não bate com a versão $versao do pyproject.toml"
+            exit 1
+          fi
+      - name: Construir e conferir
+        run: |
+          python -m pip install build twine
+          python -m build
+          python -m twine check --strict dist/*
+      - uses: actions/upload-artifact@v7
+        with:
+          name: dist
+          path: dist/
+
+  publicar:
+    needs: construir
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/pixel-art-skills
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1
