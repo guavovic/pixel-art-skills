@@ -205,7 +205,7 @@ Com problema, a linha diz o quanto e onde, por exemplo `alerta legibilidade: fre
 | pillow shading | borda 0,06+ mais escura que o miolo nos 4 lados por igual |
 | serrilhado | mais de 6% dos degraus da silhueta fora do ritmo (3,1,3 ou 1,3,1) |
 | escala | 2+ ladrilhos de 16x16 com bloco de pixel diferente do resto |
-| composição repetida | trecho de 12x12 com detalhe igual 3+ vezes (com geração: 5+ vezes até 16 bits; janela de 24x24 no moderno) |
+| composição repetida | trecho de 12x12 com detalhe igual 3+ vezes (com geração: 5+ vezes em 8 e 16 bits; janela de 24x24 no moderno, 18x18 no 48) |
 | matiz da rampa | com `--estilo`: rampa do estilo usada na imagem que muda menos de 3° de matiz do escuro ao claro (só cores com saturação 0,10+; rampa toda abaixo de valor 0,25 fica de fora) |
 | contorno preto | todos os contornos (borda com 85%+ numa cor só, diferente do miolo) em preto puro, canal até 8 |
 | anti-alias | meio-tom (alfa parcial, ou valor entre o de dentro e o de trás) em 80%+ da borda em cada um dos 4 lados |

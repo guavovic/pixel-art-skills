@@ -53,6 +53,14 @@ def test_meio_interpola_e_pega_a_tecnica_mais_perto():
     assert (doze.grade, doze.sombreamento) == ("15-bits", "faixas")
     assert (dez.grade, dez.sombreamento, dez.passos) == ("nes", "pontilhado", 4)
     assert geracao(48).cores_camada is None
+    assert (geracao(20).textura, geracao(20).ladrilhos, geracao(24).textura, geracao(24).ladrilhos) == (0.0, True, 0.7, False)
+
+
+def test_rampa_sem_tom_repetido_quando_a_grade_junta_tons():
+    estilo = carregar_estilo({"base": "16-bits", "geracao": 10})
+    for papel in estilo.rampas:
+        rampa = estilo.rampa(papel, 0.65)
+        assert all(a != b for a, b in zip(rampa, rampa[1:])), papel
 
 
 def test_receita_sem_tamanho_usa_o_da_geracao():
@@ -133,6 +141,8 @@ def test_repeticao_por_geracao():
     assert _copias_minimas(ANCORAS[8]) == _copias_minimas(geracao(16)) == COPIAS_LADRILHOS
     assert _lado_da_janela(None) == _lado_da_janela(ANCORAS[16]) == JANELA
     assert _lado_da_janela(ANCORAS[MODERNO]) == 2 * JANELA
+    assert _copias_minimas(geracao(20)) == COPIAS_LADRILHOS and _copias_minimas(geracao(24)) == COPIAS
+    assert _lado_da_janela(geracao(48)) == 18
 
 
 def test_tabela_do_guia_bate_com_as_ancoras():

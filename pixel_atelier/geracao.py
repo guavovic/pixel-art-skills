@@ -5,8 +5,9 @@ resolução de referência, passos das rampas, grade de cores, limite de cores d
 camada, sombreamento, contorno e textura. O tema continua dando as cores, o céu e a atmosfera.
 
 Os números ficam em `ANCORAS` (8, 16 e 32 bits, e moderno = 64). Valor entre duas âncoras (10, 12,
-24) interpola os números na escala de bits (log2) e pega a técnica da âncora mais perto; acima de
-64 vale o moderno. As fontes de cada número estão no capítulo `geracoes` do guia.
+24) interpola os números na escala de bits (log2) e pega a técnica da âncora mais perto (grade,
+sombreamento, contorno, textura e fundo em ladrilhos); acima de 64 vale o moderno. As fontes de
+cada número estão no capítulo `geracoes` do guia.
 """
 from __future__ import annotations
 
@@ -43,13 +44,15 @@ class Geracao:
     degraus: int  # tons da rampa em cada faixa, da borda para dentro
     contorno: str  # "preto", "escuro" (a cor de contorno do tema) ou "selout" (o tom mais escuro da peça)
     textura: float  # 0 a 1: manchas de tom vizinho dentro das peças
+    ladrilhos: bool  # fundo montado com ladrilhos repetidos: o `revisar` tolera mais cópias
+    detalhe: float  # tamanho do detalhe em relação ao de 8 a 32 bits: a janela da composição repetida
 
 
 ANCORAS = {
-    8: Geracao(8, "8-bits", (256, 240), 3, 25, 13, "nes", "pontilhado", 1, 1, "preto", 0.0),
-    16: Geracao(16, "16-bits", (256, 224), 5, 121, 15, "15-bits", "faixas", 2, 1, "escuro", 0.0),
-    32: Geracao(32, "32-bits", (320, 240), 6, 256, 255, "15-bits", "faixas", 2, 2, "selout", 0.7),
-    MODERNO: Geracao(MODERNO, "moderno", (640, 360), 8, 256, None, "livre", "faixas", 3, 2, "selout", 1.0),
+    8: Geracao(8, "8-bits", (256, 240), 3, 25, 13, "nes", "pontilhado", 1, 1, "preto", 0.0, True, 1.0),
+    16: Geracao(16, "16-bits", (256, 224), 5, 121, 15, "15-bits", "faixas", 2, 1, "escuro", 0.0, True, 1.0),
+    32: Geracao(32, "32-bits", (320, 240), 6, 256, 255, "15-bits", "faixas", 2, 2, "selout", 0.7, False, 1.0),
+    MODERNO: Geracao(MODERNO, "moderno", (640, 360), 8, 256, None, "livre", "faixas", 3, 2, "selout", 1.0, False, 2.0),
 }
 
 
@@ -108,7 +111,9 @@ def geracao(valor: object) -> Geracao:
         largura_faixa=perto.largura_faixa,
         degraus=perto.degraus,
         contorno=perto.contorno,
-        textura=round(a.textura + (b.textura - a.textura) * t, 3),
+        textura=perto.textura,
+        ladrilhos=perto.ladrilhos,
+        detalhe=round(_entre(a.detalhe, b.detalhe, t), 3),
     )
 
 
