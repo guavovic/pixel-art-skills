@@ -22,7 +22,11 @@ O que entra:
 Regras e limiares (as constantes abaixo). Valor é a luminância de `cor.luminancia`, de 0 a 1:
 olhar valor e não matiz é o teste da imagem em escala de cinza.
 - cores: até 16 num sprite e 64 numa cena; com `estilo`, cor fora da paleta também é alerta.
-  Pares de cores quase iguais (distância RGB < 4) aparecem no texto, sem virar alerta.
+  Pares de cores quase iguais (distância RGB < 4) aparecem no texto, sem virar alerta. Com
+  geração, a cena vai até o limite da época (`geracao.ANCORAS`: 25 em 8 bits, 121 em 16, 256 em
+  32 e moderno).
+- cores por camada (só com geração): cada camada até o limite da época (13 em 8 bits, 15 em 16,
+  255 em 32; moderno não tem); sem as camadas, pula.
 - contraste: na borda de cada silhueta, a diferença de valor contra o que está atrás (o pixel da
   borda ou o de dentro dele, o que contrastar mais, para o contorno escuro em fundo escuro não
   contar como falha). Mediana de pelo menos 0,05 entre camadas e 0,10 da frente contra o fundo.
@@ -44,12 +48,14 @@ olhar valor e não matiz é o teste da imagem em escala de cinza.
 - composição repetida (heurística): trecho de 12x12 que aparece igual 3 vezes ou mais, sem
   sobrepor. Só conta trecho com detalhe: 4 cores ou mais, nenhuma em mais de 60% e pelo menos 6
   linhas e 6 colunas diferentes (tronco e faixa não contam); textura periódica e pontilhado (mais
-  de 25% de blocos 2x2 em xadrez) também não.
+  de 25% de blocos 2x2 em xadrez) também não. Em geração de fundo em ladrilhos (até 16 bits),
+  o alerta começa em 5 cópias; e a janela cresce com a altura da época (12 a cada 180 linhas: 24x24
+  no moderno, o mesmo pedaço da tela que 12x12 cobre em 320x180).
 - laço (a imagem sozinha não diz se a cena dá a volta: vale a marca que o `gerar` grava no PNG, ou
   `laco=True`/`--laco` para forçar e `laco=False` para pular): a diferença de
   valor entre a coluna da borda direita e a da esquerda (a emenda), no composto e em cada camada.
   Pixel cheio contra vazio conta 1. Alerta quando a emenda passa de 3 vezes a média das
-  diferenças entre colunas vizinhas e também da maior delas: num laço certo a emenda é só mais um
+  diferenças entre colunas vizinhas e também da maior delas com 5% de folga: num laço certo a emenda é só mais um
   par de colunas, então nunca é a maior da imagem com folga; num laço quebrado (objeto cortado,
   degradê que não volta) ela é.
 - matiz da rampa (precisa do `estilo`): cada rampa do estilo que a imagem usa, com 3 ou mais cores de
@@ -93,7 +99,8 @@ from PIL import Image, ImageChops, ImageStat
 
 from .cor import QUASE_IGUAL, distancia2, luminancia, rgb_para_hex
 from .estilo import Estilo, carregar_estilo
-from .imagem import abrir, compor, escala_indicada, escala_inteira, marca_de_laco, reduzir, vizinho
+from .geracao import Geracao, geracao as da_geracao
+from .imagem import abrir, compor, escala_indicada, escala_inteira, marca_de_geracao, marca_de_laco, reduzir, vizinho
 from .silhuetas import separar
 
 CORES_SPRITE = 16
@@ -117,8 +124,12 @@ JANELA_CORES = 4
 JANELA_DOMINANTE = 0.6  # trecho com uma cor em mais disso é liso demais para contar como cópia
 JANELA_VARIADA = 6  # linhas e colunas diferentes que o trecho precisa ter
 COPIAS = 3
+LINHAS_POR_JANELA = 180  # com geração, a janela cresce 12 pixels a cada 180 linhas da época: 24x24 no moderno (360)
+COPIAS_LADRILHOS = 5  # 8 e 16 bits montavam o fundo com ladrilhos de 8x8 repetidos: 3 cópias ali é o normal
+LADRILHOS_ATE = 16  # geração até essa (8, 12, 16) é de fundo em ladrilhos
 ATMOSFERA = 0.5  # camada com mais pixels de borda do que isso (fração) é névoa ou raio pontilhado
 LACO_EMENDA = 3  # emenda acima disso vezes a média entre colunas vizinhas (e acima da maior) é laço quebrado
+LACO_FOLGA = 1.05  # e acima da maior com 5% de folga: tronco inclinado cruzando a emenda põe as colunas dali no mesmo nível
 LACO_QUADROS = 1.1  # do último quadro para o primeiro acima disso vezes a maior troca entre quadros seguidos: pulo (o laço certo chega a 1,03)
 LACO_LADO = 32  # px; a conta do laço roda nos quadros reduzidos a essa largura, onde o passo grande não satura
 RAMPA_MATIZ = 3  # graus do escuro ao claro: abaixo disso é só o arredondamento do RGB, a rampa só muda o brilho
@@ -473,6 +484,53 @@ def _cores(alvo: Image.Image, limite: int, estilo: Estilo | None) -> Checagem:
     return Checagem("cores", "alerta" if alerta else "ok", detalhe)
 
 
+def _geracao_da_revisao(geracao: "int | str | None", estilo: Estilo | None, arquivo: Any) -> Geracao | None:
+    if geracao is not None:
+        return da_geracao(geracao)
+    if estilo is not None and estilo.geracao is not None:
+        return estilo.geracao
+    e_png = isinstance(arquivo, (str, Path)) and Path(arquivo).suffix.lower() == ".png"
+    if not e_png:
+        return None
+    numero = marca_de_geracao(arquivo)
+    if numero is None:
+        return None
+    return da_geracao(numero)
+
+
+def _limite_de_cores(sprite: bool, epoca: Geracao | None) -> int:
+    if sprite:
+        return CORES_SPRITE
+    if epoca is None:
+        return CORES_CENA
+    return epoca.cores_cena
+
+
+def _copias_minimas(epoca: Geracao | None) -> int:
+    fundo_em_ladrilhos = epoca is not None and epoca.numero <= LADRILHOS_ATE
+    return COPIAS_LADRILHOS if fundo_em_ladrilhos else COPIAS
+
+
+def _lado_da_janela(epoca: Geracao | None) -> int:
+    if epoca is None:
+        return JANELA
+    return JANELA * max(1, epoca.tamanho[1] // LINHAS_POR_JANELA)
+
+
+def _cores_por_camada(lidas: list[tuple[str, Image.Image]], epoca: Geracao) -> Checagem:
+    if epoca.cores_camada is None:
+        return Checagem("cores por camada", "pulada", f"{epoca.nome}: sem limite por camada")
+    if not lidas:
+        return Checagem("cores por camada", "pulada", "sem camadas (passe camadas ou grave com saida \"tudo\")")
+    contagens = []
+    for nome, camada in lidas:
+        contagem = camada.getcolors(maxcolors=camada.width * camada.height) or []
+        contagens.append((len({cor[:3] for _, cor in contagem if cor[3] > 0}), nome))
+    maior, nome = max(contagens)
+    detalhe = f"{epoca.nome}: até {maior} em {nome} (limite {epoca.cores_camada})"
+    return Checagem("cores por camada", "alerta" if maior > epoca.cores_camada else "ok", detalhe)
+
+
 def _contraste(pares: list[tuple[str, list[tuple[int, int, float]]]]) -> Checagem:
     if not pares:
         return Checagem("contraste", "pulada", "sem camadas nem fundo (passe camadas ou fundo)")
@@ -714,43 +772,43 @@ def _escala(cena: Image.Image) -> Checagem:
     return Checagem("escala", "alerta" if len(fora) >= LADRILHOS_FORA else "ok", detalhe, True)
 
 
-def _repeticao(alvo: Image.Image) -> Checagem:
+def _repeticao(alvo: Image.Image, copias_minimas: int = COPIAS, lado: int = JANELA) -> Checagem:
     largura, altura = alvo.size
-    if largura < JANELA or altura < JANELA:
-        return Checagem("composição repetida", "pulada", f"imagem menor que {JANELA}x{JANELA}", True)
+    if largura < lado or altura < lado:
+        return Checagem("composição repetida", "pulada", f"imagem menor que {lado}x{lado}", True)
     dados = alvo.tobytes()
-    passo, w = largura * 4, JANELA * 4
-    # cada trecho de JANELA pixels numa linha vira um número; a janela é a pilha de JANELA trechos
+    passo, w = largura * 4, lado * 4
+    # cada trecho de `lado` pixels numa linha vira um número; a janela é a pilha de `lado` trechos
     trechos: dict[bytes, int] = {}
     por_linha = []
     for y in range(altura):
         linha = dados[y * passo:(y + 1) * passo]
         por_linha.append([trechos.setdefault(linha[x * 4:x * 4 + w], len(trechos))
-                          for x in range(largura - JANELA + 1)])
+                          for x in range(largura - lado + 1)])
     grupos: dict[tuple[int, ...], list[tuple[int, int]]] = {}
-    for y in range(altura - JANELA + 1):
-        for x, pilha in enumerate(zip(*por_linha[y:y + JANELA])):
+    for y in range(altura - lado + 1):
+        for x, pilha in enumerate(zip(*por_linha[y:y + lado])):
             grupos.setdefault(pilha, []).append((x, y))
     objetos: dict[tuple[tuple[int, int], ...], list[tuple[int, int]]] = {}
     for posicoes in grupos.values():
-        if len(posicoes) < COPIAS:
+        if len(posicoes) < copias_minimas:
             continue
         copias: list[tuple[int, int]] = []
         for x, y in posicoes:  # em ordem de leitura; guarda só cópias que não se sobrepõem
-            if all(abs(x - cx) >= JANELA or abs(y - cy) >= JANELA for cx, cy in copias):
+            if all(abs(x - cx) >= lado or abs(y - cy) >= lado for cx, cy in copias):
                 copias.append((x, y))
-        if len(copias) < COPIAS:
+        if len(copias) < copias_minimas:
             continue
         x0, y0 = copias[0]
         inicio = y0 * passo + x0 * 4
-        if not _detalhada(b"".join(dados[inicio + r * passo:inicio + r * passo + w] for r in range(JANELA))):
+        if not _detalhada(b"".join(dados[inicio + r * passo:inicio + r * passo + w] for r in range(lado)), lado):
             continue
         x0, y0 = copias[0]
         deslocamentos = tuple((x - x0, y - y0) for x, y in copias)
         objetos.setdefault(deslocamentos, []).append((x0, y0))
     if not objetos:
         return Checagem("composição repetida", "ok",
-                        f"nenhum trecho {JANELA}x{JANELA} igual {COPIAS}+ vezes", True)
+                        f"nenhum trecho {lado}x{lado} igual {copias_minimas}+ vezes", True)
     deslocamentos, origens = max(objetos.items(), key=lambda item: (len(item[0]), len(item[1])))
     x0, y0 = min(origens)
     lugares = " ".join(f"({x0 + dx},{y0 + dy})" for dx, dy in deslocamentos[:4])
@@ -798,7 +856,7 @@ def _laco(imagens: list[tuple[str, Image.Image]], pedido: bool | None, marca: bo
     for nome, imagem in imagens:
         vizinhas, emenda = _diferencas_de_colunas(_Px(imagem))
         medidas.append((nome, emenda, sum(vizinhas) / len(vizinhas), max(vizinhas)))
-    quebradas = [m for m in medidas if m[1] > LACO_EMENDA * m[2] and m[1] > m[3]]
+    quebradas = [m for m in medidas if m[1] > LACO_EMENDA * m[2] and m[1] > LACO_FOLGA * m[3]]
     _, emenda, media, _ = medidas[0]
     if not quebradas:
         onde = f"composto e {len(imagens) - 1} camadas" if len(imagens) > 1 else "composto"
@@ -811,28 +869,28 @@ def _laco(imagens: list[tuple[str, Image.Image]], pedido: bool | None, marca: bo
                                       "média); a borda direita não continua na esquerda: desenhe a camada com laço")
 
 
-def _detalhada(janela: bytes) -> bool:
+def _detalhada(janela: bytes, lado: int = JANELA) -> bool:
     """Trecho com cores bastante e que não é textura periódica (pontilhado, listras)."""
     pixels = [janela[i:i + 4] for i in range(0, len(janela), 4)]
     contagem = Counter(pixels)
     if len(contagem) < JANELA_CORES or contagem.most_common(1)[0][1] > JANELA_DOMINANTE * len(pixels):
         return False  # pouca cor ou quase tudo de uma cor só: céu, chão liso, beira reta
-    linhas = {tuple(pixels[r * JANELA:(r + 1) * JANELA]) for r in range(JANELA)}
-    colunas = {tuple(pixels[c::JANELA]) for c in range(JANELA)}
-    if min(len(linhas), len(colunas)) < JANELA_VARIADA:
+    linhas = {tuple(pixels[r * lado:(r + 1) * lado]) for r in range(lado)}
+    colunas = {tuple(pixels[c::lado]) for c in range(lado)}
+    if min(len(linhas), len(colunas)) < JANELA_VARIADA * lado // JANELA:
         return False  # quase igual numa direção: tronco, faixa, degradê
     xadrez = 0  # blocos 2x2 em xadrez (a b / b a): muito disso é pontilhado, que se repete sozinho
-    for r in range(JANELA - 1):
-        for c in range(JANELA - 1):
-            a, b = pixels[r * JANELA + c], pixels[r * JANELA + c + 1]
-            xadrez += a != b and pixels[(r + 1) * JANELA + c] == b and pixels[(r + 1) * JANELA + c + 1] == a
-    if xadrez > 0.25 * (JANELA - 1) ** 2:
+    for r in range(lado - 1):
+        for c in range(lado - 1):
+            a, b = pixels[r * lado + c], pixels[r * lado + c + 1]
+            xadrez += a != b and pixels[(r + 1) * lado + c] == b and pixels[(r + 1) * lado + c + 1] == a
+    if xadrez > 0.25 * (lado - 1) ** 2:
         return False
-    for p in range(1, JANELA // 2 + 1):  # igual a si mesma andando p pixels: listra ou textura
+    for p in range(1, lado // 2 + 1):  # igual a si mesma andando p pixels: listra ou textura
         n = len(pixels)
-        if all(pixels[i] == pixels[i + p] for i in range(n - p) if i % JANELA < JANELA - p):
+        if all(pixels[i] == pixels[i + p] for i in range(n - p) if i % lado < lado - p):
             return False
-        if all(pixels[i] == pixels[i + p * JANELA] for i in range(n - p * JANELA)):
+        if all(pixels[i] == pixels[i + p * lado] for i in range(n - p * lado)):
             return False
     return True
 
@@ -1023,6 +1081,7 @@ def revisar(
     posicao: tuple[int, int] | None = None,
     estilo: "str | Estilo | None" = None,
     laco: bool | None = None,
+    geracao: "int | str | None" = None,
 ) -> Revisao:
     """Confere `imagem` pelas regras e devolve a `Revisao` (use `resumo()` para o texto).
 
@@ -1031,6 +1090,8 @@ def revisar(
     (x, y do canto de cima; padrão: no meio). `estilo`: confere as cores contra a paleta.
     `laco`: confere a emenda no composto e em cada camada. None (padrão) segue a marca que o
     `gerar` grava no PNG (sem marca, pula); True força a conferência e False pula.
+    `geracao` (8, 12, 16, 32, "moderno"): confere pelos limites da época; None (padrão) segue a do
+    `estilo` ou a marca que o `gerar` grava no PNG (sem nenhuma, valem os limites gerais).
     Arquivo que não abre ou tamanhos que não batem levantam `ValueError` ou `OSError`.
     """
     nome = Path(imagem).name if isinstance(imagem, (str, Path)) else "imagem"
@@ -1044,6 +1105,7 @@ def revisar(
     marca = marca_de_laco(imagem) if laco is None and isinstance(imagem, (str, Path)) else None
     if isinstance(estilo, str):
         estilo = carregar_estilo(estilo)
+    epoca = _geracao_da_revisao(geracao, estilo, parada)
 
     lidas: list[tuple[str, Image.Image]] = []
     if fundo is None:
@@ -1111,14 +1173,14 @@ def revisar(
         pillow, serrilhado = _pillow(silhuetas), _serrilhado(silhuetas)
 
     checagens = [
-        _cores(alvo, CORES_SPRITE if sprite else CORES_CENA, estilo),
+        _cores(alvo, _limite_de_cores(sprite, epoca), estilo),
         contraste,
         legibilidade,
         _soltos(alvo_px),
         pillow,
         serrilhado,
         _escala(cena),
-        _repeticao(alvo),
+        _repeticao(alvo, _copias_minimas(epoca), _lado_da_janela(epoca)),
         _laco([("composto", alvo)] + lidas, laco, marca),
         _rampa_matiz(alvo, estilo),
         _contorno_preto(silhuetas),
@@ -1126,6 +1188,8 @@ def revisar(
         _linha_iso(silhuetas),
         _tempo(duracoes),
     ]
+    if epoca is not None:
+        checagens.insert(1, _cores_por_camada(lidas, epoca))
     if animada is not None:
         checagens.append(_laco_dos_quadros(diferencas))
     return Revisao(nome=nome, largura=alvo.width, altura=alvo.height, tipo=tipo, escala=escala,
