@@ -1,0 +1,13 @@
+{
+  "nome": "8-bits",
+  "descricao": "Técnica de 8 bits sobre o tema snes-diurno: cores da grade do NES, 3 tons por rampa, pontilhado e contorno preto, 256x240.",
+  "base": "snes-diurno",
+  "geracao": 8,
+  "rampas": {
+    "nuvem": [
+      "#8c9cd8",
+      "#c8d8f0",
+      "#ffffff"
+    ]
+  }
+}

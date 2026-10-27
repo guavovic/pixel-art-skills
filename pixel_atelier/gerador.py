@@ -165,14 +165,15 @@ def gerar(receita: "str | Path | dict[str, Any] | Receita", pasta: str | Path | 
 
 def _gravar(resultado: Resultado, pasta: Path) -> None:
     r = resultado.receita
+    epoca = _geracao_da_receita(r)
     pasta.mkdir(parents=True, exist_ok=True)
     if r.saida in ("tudo", "composto"):
         destino = pasta / f"{r.cena}.png"
-        gravar_png(resultado.composto, destino, r.laco)
+        gravar_png(resultado.composto, destino, r.laco, geracao=epoca)
         resultado.arquivos.append(destino)
         if r.ampliar > 1:
             destino = pasta / f"{r.cena}-{r.ampliar}x.png"
-            gravar_png(ampliar(resultado.composto, r.ampliar), destino, r.laco, escala=r.ampliar)
+            gravar_png(ampliar(resultado.composto, r.ampliar), destino, r.laco, escala=r.ampliar, geracao=epoca)
             resultado.arquivos.append(destino)
         if r.animacao is not None:
             _gravar_animacao(resultado, pasta)
@@ -180,8 +181,14 @@ def _gravar(resultado: Resultado, pasta: Path) -> None:
         (pasta / r.cena).mkdir(exist_ok=True)
         for receita_camada, c in zip(r.camadas, resultado.camadas):
             c.arquivo = pasta / r.cena / receita_camada.arquivo
-            gravar_png(c.imagem, c.arquivo, receita_camada.parametros["laco"])
+            gravar_png(c.imagem, c.arquivo, receita_camada.parametros["laco"], geracao=epoca)
             resultado.arquivos.append(c.arquivo)
+
+
+def _geracao_da_receita(r: Receita) -> int | None:
+    if r.estilo.geracao is None:
+        return None
+    return r.estilo.geracao.numero
 
 
 def _gravar_animacao(resultado: Resultado, pasta: Path) -> None:
@@ -195,7 +202,7 @@ def _gravar_animacao(resultado: Resultado, pasta: Path) -> None:
     nomes = dados.get("folhas", [dados.get("folha")])
     arquivos_folha = [pasta / nome for nome in nomes]
     for imagem, arquivo in zip(paginas(resultado.quadros, dados), arquivos_folha):
-        gravar_png(imagem, arquivo, r.laco)
+        gravar_png(imagem, arquivo, r.laco, geracao=_geracao_da_receita(r))
     arquivo_tempo = pasta / f"{r.cena}-quadros.json"
     gravar_tempo(dados, arquivo_tempo)
     resultado.arquivos_da_animacao = [gif, *arquivos_folha, arquivo_tempo]

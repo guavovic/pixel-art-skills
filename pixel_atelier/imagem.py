@@ -10,12 +10,13 @@ from PIL.PngImagePlugin import PngInfo
 
 MARCA_LACO = "pixel-atelier:laco"  # chave de texto no PNG que o `gerar` grava: "sim" ou "nao"
 MARCA_ESCALA = "pixel-atelier:escala"  # no composto ampliado: quantas vezes ("3")
+MARCA_GERACAO = "pixel-atelier:geracao"  # com "geracao" no estilo: o número dela ("16")
 BLOCO_MAX = 16  # sem marca, bloco maior que isso é arte chapada, não ampliada
 ACASO = 65536  # sem marca, o bloco N vale se N elevado ao número de trocas passa disso (acaso de 1 em 65536)
 
 
-def gravar_png(imagem: Image.Image, destino: Path, laco: bool, escala: int = 1) -> None:
-    """Grava o PNG com a marca de laço (e a de escala, se ampliado) em blocos de texto (tEXt).
+def gravar_png(imagem: Image.Image, destino: Path, laco: bool, escala: int = 1, geracao: int | None = None) -> None:
+    """Grava o PNG com a marca de laço (e a de escala, se ampliado, e a de geração) em blocos de texto (tEXt).
 
     As marcas viajam junto com o arquivo.
     """
@@ -23,6 +24,8 @@ def gravar_png(imagem: Image.Image, destino: Path, laco: bool, escala: int = 1) 
     info.add_text(MARCA_LACO, "sim" if laco else "nao")
     if escala > 1:
         info.add_text(MARCA_ESCALA, str(escala))
+    if geracao is not None:
+        info.add_text(MARCA_GERACAO, str(geracao))
     imagem.save(destino, pnginfo=info)
 
 
@@ -34,6 +37,15 @@ def marca_de_laco(arquivo: "str | Path") -> bool | None:
     if isinstance(comentario, bytes) and comentario.startswith(f"{MARCA_LACO}=".encode()):
         valor = comentario.decode().partition("=")[2]  # o GIF não tem bloco de texto: a marca vai no comentário
     return {"sim": True, "nao": False}.get(valor) if isinstance(valor, str) else None
+
+
+def marca_de_geracao(arquivo: "str | Path") -> int | None:
+    """A geração que o `gerar` gravou no PNG; None sem marca."""
+    with Image.open(arquivo) as aberta:
+        valor = aberta.info.get(MARCA_GERACAO)
+    if isinstance(valor, str) and valor.isdigit():
+        return int(valor)
+    return None
 
 
 def escala_indicada(arquivo: "str | Path") -> int | None:
