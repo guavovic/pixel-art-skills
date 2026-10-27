@@ -7,7 +7,7 @@ from typing import Any
 from PIL import Image, ImageChops
 
 from ..pintura import pintar
-from ..ruido import ruido_periodico, sortear
+from ..ruido import esticar, ruido_periodico, sortear
 from ..tela import Peca, Tela
 from ._base import preparar, semente
 
@@ -70,15 +70,12 @@ def nuvem(
     def bruto(x: int, y: int) -> float:
         return ruido_a(x) * 0.7 + ruido_b(x * 2 + y * 3) * 0.3
 
-    # o alcance do ruído muda com a seed: medido no miolo da faixa, a densidade vale igual para todas
     linhas_do_miolo = range(int(centro - meia / 2), int(centro + meia / 2) + 1)
-    valores = [bruto(x, y) for y in linhas_do_miolo for x in range(largura)]
-    menor = min(valores)
-    alcance = max(valores) - menor or 1.0
+    esticado = esticar(bruto, largura, linhas_do_miolo)
 
     def campo(x: int, y: int) -> float:
         faixa_y = max(0.0, 1 - abs(y - centro) / meia)
-        v = (bruto(x, y) - menor) / alcance
+        v = esticado(x, y)
         return max(0.0, v - (1 - densidade)) * 2.0 * faixa_y
 
     mascara = tela.pontilhar(campo, escala=2)
