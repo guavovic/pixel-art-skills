@@ -17,12 +17,12 @@ De onde vêm os números:
 - **32 bits (PlayStation, Saturn)**: 320x240 é o modo mais usado em 2D; cor de 15 bits; textura com tabela de 8 bits (256 cores, 255 e o transparente). Sem limite de tela além da tabela.
 - **Moderno**: sem hardware; 640x360 amplia inteiro para 1280x720 (2x) e 1920x1080 (3x). O limite de cores vira escolha: 256 na cena ainda lê como pixel art.
 
-Números no meio interpolam na escala de bits (log2) e pegam a técnica da geração mais perto: 12 dá 256x230, 63 cores, 14 por camada, faixas. O 12 é o meio-termo limpo; 10, 24 e 48 também desenham, mas a cena do pacote ainda dá alerta neles (pillow em 10, composição repetida em 24 e 48).
+Números no meio interpolam na escala de bits (log2) os números (tamanho, tons, cores, tamanho do detalhe) e pegam a técnica inteira da geração mais perto: grade, sombreamento, faixas, contorno, textura e fundo em ladrilhos. 12 dá 256x230, 63 cores, 14 por camada, faixas; 24 dá 288x234 com a técnica de 32. Quando a grade junta dois tons vizinhos de uma rampa (as 54 do NES têm poucos tons por matiz), a rampa fica com um tom a menos em vez de repetir a cor.
 
 ## O que o `revisar` muda por geração
 - **cores**: o limite da cena vira o da geração (25, 121, 256) em vez dos **64** de `CORES_CENA`.
 - **cores por camada**: regra nova, só com geração e camadas; alerta quando uma camada passa do limite da tabela. No moderno ela é pulada.
-- **composição repetida**: 8 a 16 bits (até `LADRILHOS_ATE` = **16**) montavam o fundo com ladrilhos repetidos, então ali o alerta só sai com **5** cópias (`COPIAS_LADRILHOS`). A janela cresce **12** px a cada **180** linhas da geração (`LINHAS_POR_JANELA`): 24x24 no moderno, onde o detalhe é o dobro.
+- **composição repetida**: 8 e 16 bits (e os números que pegam a técnica deles) montavam o fundo com ladrilhos repetidos, então ali o alerta só sai com **5** cópias (`COPIAS_LADRILHOS`). A janela é a de 12x12 vezes o tamanho do detalhe da geração: 1 de 8 a 32 bits, 2 no moderno (24x24), e no meio interpola (18x18 no 48).
 - Sem geração (receita antiga, PNG sem marca), tudo vale como antes. `--geracao 16` (ou `geracao` na ferramenta MCP) força os limites numa imagem sem marca.
 
 ## Como cada época se parece

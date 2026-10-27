@@ -21,6 +21,8 @@ Ateliê de pixel art para agentes de IA. O agente escreve uma receita JSON curta
 
 <img src="docs/estilos.gif" alt="A mesma receita nos estilos metroidvania-noturno, snes-diurno e game-boy" width="100%">
 
+<img src="docs/geracoes.gif" alt="A cena de exemplo em 8, 16 e 32 bits e moderna, cada uma na resolução da época" width="100%">
+
 <img src="docs/revisar.gif" alt="Antes e depois do revisar: alerta de contraste com a frente apagada e, depois do ajuste na receita, nenhum alerta" width="100%">
 
 <img src="docs/referencia.gif" alt="Uma imagem de referência vira paleta e rampas pelo ref, e a receita de exemplo sai no estilo novo" width="100%">

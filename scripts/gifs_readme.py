@@ -4,7 +4,8 @@
 
 - parallax.gif: o exemplo snes-diurno-animado pelo próprio `gerar`, um laço inteiro sem emenda com
   cada plano na sua velocidade, ampliado 2 vezes.
-- estilos.gif: a mesma receita nos três presets do pacote.
+- estilos.gif: a mesma receita nos três temas do pacote.
+- geracoes.gif: a cena de exemplo em 8, 16 e 32 bits e moderna, cada uma no tamanho da época.
 - revisar.gif: antes e depois do `revisar`, com o relatório em texto.
 - referencia.gif: uma referência pintada aqui mesmo vira paleta e rampas pelo `ref`, e a receita
   de exemplo sai no estilo novo.
@@ -137,10 +138,32 @@ def gif_parallax() -> Path:
 
 def gif_estilos() -> Path:
     quadros = []
-    for nome, ajustes in MONTAR.AJUSTES.items():
+    temas = {nome: ajustes for nome, ajustes in MONTAR.AJUSTES.items() if nome not in MONTAR.GERACOES}
+    for nome, ajustes in temas.items():
         cena = ampliar(compor(camadas_da_cena(carregar_estilo(nome), ajustes)), ESCALA)
         quadros.append(empilhar(cena, painel([(f'"estilo": "{nome}"', TEXTO)], cena.width, 60)))
     return gravar_gif(quadros, 1800, "estilos.gif")
+
+
+def gif_geracoes() -> Path:
+    """Cada época em escala inteira no mesmo quadro: 3x até 32 bits e o moderno em 2x, recortado no
+    meio (a tela inteira em 2x passaria da largura dos outros GIFs)."""
+    largura, altura = LARGURA * ESCALA, 240 * ESCALA
+    quadros = []
+    for nome in MONTAR.GERACOES:
+        receita = json.loads((RAIZ / "exemplos" / f"{nome}.json").read_text(encoding="utf-8"))
+        cena = gerar({**receita, "saida": "composto", "ampliar": 1}).composto
+        escala = min(ESCALA, altura // cena.height)
+        rotulo = f'"estilo": "{nome}"  {cena.width}x{cena.height}'
+        if cena.width * escala > largura:
+            sobra = cena.width - largura // escala
+            cena = cena.crop((sobra // 2, 0, sobra // 2 + largura // escala, cena.height))
+            rotulo += ", o meio em 2x"
+        ampliada = ampliar(cena, escala)
+        tela = Image.new("RGB", (largura, altura), FUNDO)
+        tela.paste(ampliada.convert("RGB"), ((largura - ampliada.width) // 2, (altura - ampliada.height) // 2))
+        quadros.append(empilhar(tela, painel([(rotulo, TEXTO)], largura, 60)))
+    return gravar_gif(quadros, 2200, "geracoes.gif")
 
 
 def receita_vale(mata: float, chao: float) -> dict:
@@ -246,7 +269,7 @@ def gif_referencia() -> Path:
 
 def main() -> None:
     PASTA.mkdir(exist_ok=True)
-    for gerar_gif in (gif_parallax, gif_estilos, gif_revisar, gif_referencia):
+    for gerar_gif in (gif_parallax, gif_estilos, gif_geracoes, gif_revisar, gif_referencia):
         destino = gerar_gif()
         print(f"{destino.relative_to(RAIZ).as_posix()}: {destino.stat().st_size / 1024:.0f} KB")
 

@@ -48,9 +48,9 @@ olhar valor e não matiz é o teste da imagem em escala de cinza.
 - composição repetida (heurística): trecho de 12x12 que aparece igual 3 vezes ou mais, sem
   sobrepor. Só conta trecho com detalhe: 4 cores ou mais, nenhuma em mais de 60% e pelo menos 6
   linhas e 6 colunas diferentes (tronco e faixa não contam); textura periódica e pontilhado (mais
-  de 25% de blocos 2x2 em xadrez) também não. Em geração de fundo em ladrilhos (até 16 bits),
-  o alerta começa em 5 cópias; e a janela cresce com a altura da época (12 a cada 180 linhas: 24x24
-  no moderno, o mesmo pedaço da tela que 12x12 cobre em 320x180).
+  de 25% de blocos 2x2 em xadrez) também não. Em geração de fundo em ladrilhos (8 e 16 bits),
+  o alerta começa em 5 cópias; e a janela cresce com o tamanho do detalhe da época (24x24 no
+  moderno, o mesmo pedaço da tela que 12x12 cobre em 320x180).
 - laço (a imagem sozinha não diz se a cena dá a volta: vale a marca que o `gerar` grava no PNG, ou
   `laco=True`/`--laco` para forçar e `laco=False` para pular): a diferença de
   valor entre a coluna da borda direita e a da esquerda (a emenda), no composto e em cada camada.
@@ -124,9 +124,7 @@ JANELA_CORES = 4
 JANELA_DOMINANTE = 0.6  # trecho com uma cor em mais disso é liso demais para contar como cópia
 JANELA_VARIADA = 6  # linhas e colunas diferentes que o trecho precisa ter
 COPIAS = 3
-LINHAS_POR_JANELA = 180  # com geração, a janela cresce 12 pixels a cada 180 linhas da época: 24x24 no moderno (360)
 COPIAS_LADRILHOS = 5  # 8 e 16 bits montavam o fundo com ladrilhos de 8x8 repetidos: 3 cópias ali é o normal
-LADRILHOS_ATE = 16  # geração até essa (8, 12, 16) é de fundo em ladrilhos
 ATMOSFERA = 0.5  # camada com mais pixels de borda do que isso (fração) é névoa ou raio pontilhado
 LACO_EMENDA = 3  # emenda acima disso vezes a média entre colunas vizinhas (e acima da maior) é laço quebrado
 LACO_FOLGA = 1.05  # e acima da maior com 5% de folga: tronco inclinado cruzando a emenda põe as colunas dali no mesmo nível
@@ -507,14 +505,14 @@ def _limite_de_cores(sprite: bool, epoca: Geracao | None) -> int:
 
 
 def _copias_minimas(epoca: Geracao | None) -> int:
-    fundo_em_ladrilhos = epoca is not None and epoca.numero <= LADRILHOS_ATE
+    fundo_em_ladrilhos = epoca is not None and epoca.ladrilhos
     return COPIAS_LADRILHOS if fundo_em_ladrilhos else COPIAS
 
 
 def _lado_da_janela(epoca: Geracao | None) -> int:
     if epoca is None:
         return JANELA
-    return JANELA * max(1, epoca.tamanho[1] // LINHAS_POR_JANELA)
+    return round(JANELA * epoca.detalhe)
 
 
 def _cores_por_camada(lidas: list[tuple[str, Image.Image]], epoca: Geracao) -> Checagem:

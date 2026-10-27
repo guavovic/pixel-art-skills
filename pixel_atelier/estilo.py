@@ -134,11 +134,17 @@ class Estilo:
         return self._cache[chave]
 
     def rampa(self, papel: str, profundidade: float = 0.0) -> tuple[RGB, ...]:
-        """Rampa do papel (escuro ao claro) já na profundidade, só com cores da paleta."""
+        """Rampa do papel (escuro ao claro) já na profundidade, só com cores da paleta.
+
+        Com geração, tons vizinhos que a grade da época junta numa cor só viram um tom: a rampa
+        fica mais curta em vez de repetir a cor (o meio dela cairia no tom mais claro).
+        """
         chave = ("rampa", papel, round(profundidade, 4))
         if chave not in self._cache:
-            base = self._rampa_crua(papel)
-            self._cache[chave] = tuple(self.cor(c, profundidade) for c in base)
+            tons = [self.cor(c, profundidade) for c in self._rampa_crua(papel)]
+            if self.geracao is not None:
+                tons = [c for i, c in enumerate(tons) if i == 0 or c != tons[i - 1]]
+            self._cache[chave] = tuple(tons)
         return self._cache[chave]
 
     def _rampa_crua(self, papel: str) -> tuple[RGB, ...]:
