@@ -220,3 +220,14 @@ def test_pinheiro_da_cena_de_exemplo_sem_degrau_fora_do_2(numero):
     resultado = gerar(receita)
     revisao = revisar(resultado.composto, camadas=[c.imagem for c in resultado.camadas], estilo=resultado.receita.estilo)
     assert regra(revisao, "linha 2:1").estado == "ok"
+
+
+def test_musgo_da_rocha_no_game_boy_sem_pillow():
+    receita = json.loads((EXEMPLOS / "game-boy.json").read_text(encoding="utf-8"))
+    receita.pop("tamanho")
+    receita["geracao"] = 32
+    for camada in receita["camadas"]:
+        camada["seed"] += 800
+    resultado = gerar(receita)
+    revisao = revisar(resultado.composto, camadas=[c.imagem for c in resultado.camadas], estilo=resultado.receita.estilo)
+    assert regra(revisao, "pillow shading").estado == "ok"

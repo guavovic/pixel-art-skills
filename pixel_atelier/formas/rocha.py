@@ -24,7 +24,8 @@ def contorno_de_rocha(cx: float, base: float, w: float, h: float, r: random.Rand
     return pontos
 
 
-def pedra(tela: Tela, cx: float, base: float, w: float, h: float, r: random.Random, musgo: float = 0.0) -> list[Peca]:
+def pedra(tela: Tela, cx: float, base: float, w: float, h: float, r: random.Random, musgo: float = 0.0,
+          tom_musgo: int = 0) -> list[Peca]:
     m = tela.nova_mascara()
     tela.poligono(m, contorno_de_rocha(cx, base, w, h, r, lados=r.randint(6, 9)))
     pecas = [Peca(m, "pedra")]
@@ -37,7 +38,7 @@ def pedra(tela: Tela, cx: float, base: float, w: float, h: float, r: random.Rand
         pecas.append(Peca(ImageChops.multiply(racha, miolo), "pedra", tom=-1, liso=True))
     if musgo > 0 and r.random() < musgo:
         topo = tela.faixa(m, (0, -1), max(1, int(h * 0.18)))
-        pecas.append(Peca(topo, "grama", liso=True))
+        pecas.append(Peca(topo, "grama", tom=tom_musgo, liso=True))
     return pecas
 
 
@@ -68,14 +69,17 @@ def rocha(
     r = random.Random(semente(seed, 3))
     y_base = base * altura
     pecas: list[Peca] = []
+    luz_de_cima = estilo.direcao_luz[1] < 0
+    tom_musgo = 1 if luz_de_cima else 0
     for i in range(quantidade):
         cx = (i + r.uniform(0.15, 0.85)) * largura / max(1, quantidade)
         w = max(4.0, sortear(r, tamanho) * altura)
         h = w * sortear(r, achatamento)
         sorteio = random.Random(r.randrange(1 << 30))
-        pecas.extend(pedra(tela, cx, y_base + 1, w, h, sorteio, musgo))
+        pecas.extend(pedra(tela, cx, y_base + 1, w, h, sorteio, musgo, tom_musgo))
         if r.random() < grupo:
             lado = r.choice((-1, 1))
             w2 = w * r.uniform(0.35, 0.55)
-            pecas.extend(pedra(tela, cx + lado * (w * 0.5 + w2 * 0.2), y_base + 1, w2, w2 * 0.7, sorteio, musgo))
+            pecas.extend(pedra(tela, cx + lado * (w * 0.5 + w2 * 0.2), y_base + 1, w2, w2 * 0.7, sorteio, musgo,
+                              tom_musgo))
     return pintar(tela, pecas, estilo, profundidade)
