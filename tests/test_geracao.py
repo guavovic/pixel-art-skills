@@ -10,8 +10,9 @@ from PIL import Image
 
 from pixel_atelier import carregar_estilo, gerar, revisar
 from pixel_atelier.__main__ import main
-from pixel_atelier.cor import mudanca_de_matiz
-from pixel_atelier.geracao import ANCORAS, CORES_NES, MODERNO, geracao, ler_geracao, matiz_na_grade, na_grade
+from pixel_atelier.cor import hex_para_rgb, luminancia, mudanca_de_matiz
+from pixel_atelier.geracao import (ANCORAS, CORES_NES, MODERNO, geracao, ler_geracao, matiz_na_grade, na_grade,
+                                   valor_na_grade)
 from pixel_atelier.guia import capitulo
 from pixel_atelier.imagem import gravar_png, marca_de_geracao
 from pixel_atelier.revisao import COPIAS, COPIAS_LADRILHOS, JANELA, _copias_minimas, _lado_da_janela
@@ -72,6 +73,41 @@ def test_cor_da_grade_guarda_o_matiz_da_rampa():
 
     folha = carregar_estilo("snes-diurno").rampas["folha"]
     assert matiz_na_grade(list(folha), "nes") == list(folha)  # a cor mais perto já guarda: a paleta decide
+
+
+@pytest.mark.parametrize("grade, rampa, perto_do_tema", [
+    ("15-bits", ["#a8b8d8", "#becde5", "#d5e2f2", "#e6f0f9", "#f3f7fc", "#ffffff"], 1),  # neve diurna em 32 bits
+    ("nes", ["#002e1c", "#068c40", "#3beb6a"], 32),  # a de menor distância ia a -78°
+])
+def test_grade_escolhe_o_matiz_mais_perto_do_tema(grade, rampa, perto_do_tema):
+    cores = [hex_para_rgb(c) for c in rampa]
+    tema = mudanca_de_matiz(cores)[0]
+    escolhida = matiz_na_grade(cores, grade)
+    assert all(na_grade(c, grade) == c for c in escolhida)
+    assert abs(mudanca_de_matiz(escolhida)[0] - tema) < perto_do_tema
+
+
+def test_neve_diurna_em_32_bits_fica_no_matiz_do_tema():
+    neve = carregar_estilo({"base": "snes-diurno", "nome": "dia-32", "geracao": 32}).rampas["neve"]
+    assert -10 < mudanca_de_matiz(neve)[0] < -4  # o tema anda -7°; a grade dava -21°
+
+
+def test_paleta_fechada_guarda_o_degrau_de_valor_na_grade():
+    verdes = [hex_para_rgb(c) for c in ("#0f380f", "#306230", "#8bac0f", "#9bbc0f")]
+    trocas = valor_na_grade(verdes, "nes")
+    escuros = sorted({trocas[verdes[0]], trocas[verdes[1]]}, key=luminancia)
+    assert len(escuros) == 2 and luminancia(escuros[1]) - luminancia(escuros[0]) > 0.05
+    assert all(na_grade(c, "nes") == c for c in trocas.values())
+
+
+def test_contorno_preto_entra_na_paleta_fechada():
+    estilo = carregar_estilo({"base": "game-boy", "nome": "gb-8", "geracao": 8})
+    assert estilo.contorno_cor == (0, 0, 0) and (0, 0, 0) in estilo.paleta
+
+
+def test_paleta_menor_que_a_rampa_nao_usa_selout():
+    assert not carregar_estilo({"base": "game-boy", "nome": "gb-32", "geracao": 32}).selout
+    assert carregar_estilo({"base": "snes-diurno", "nome": "dia-32", "geracao": 32}).selout
 
 
 def test_receita_sem_tamanho_usa_o_da_geracao():

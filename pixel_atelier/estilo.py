@@ -50,7 +50,7 @@ from typing import Any, Iterator
 
 from .cor import (RGB, cor_mais_proxima, gerar_rampa, hex_para_rgb, luminancia, misturar, rgb_para_hex, sem_quase_iguais,
                   sem_repetir)
-from .geracao import Geracao, geracao as ler_geracao, matiz_na_grade, na_grade, reduzir_paleta
+from .geracao import Geracao, geracao as ler_geracao, matiz_na_grade, na_grade, reduzir_paleta, valor_na_grade
 
 PAPEIS = ("folha", "tronco", "pedra", "terra", "grama", "cristal", "nuvem", "nevoa", "neve")
 
@@ -180,12 +180,19 @@ class Estilo:
         atmosfera = hex_para_rgb(dados["atmosfera"])
         luz = hex_para_rgb(dados["luz"])
         rampas = {papel: _ler_rampa(valor) for papel, valor in dados["rampas"].items()}
+        paleta_fechada = sem_repetir(hex_para_rgb(c) for c in dados.get("paleta", ()))
+        com_matiz_da_grade: list[RGB] = []  # tons que a grade escolheu pelo matiz: a redução da paleta não junta
         if epoca is not None:
-            rampas = {p: matiz_na_grade(r, epoca.grade) for p, r in rampas.items()}
+            trocas = valor_na_grade(paleta_fechada, epoca.grade)
+            paleta_fechada = [trocas[c] for c in paleta_fechada]
+            lidas = {p: [trocas.get(c, c) for c in r] for p, r in rampas.items()}
+            rampas = {p: matiz_na_grade(r, epoca.grade) for p, r in lidas.items()}
+            if not paleta_fechada:
+                com_matiz_da_grade = sem_repetir(c for p, r in rampas.items() if r != lidas[p] for c in r)
         forca_atmosfera = float(dados.get("forca_atmosfera", 0.7))
 
-        if "paleta" in dados:
-            paleta = sem_repetir(hex_para_rgb(c) for c in dados["paleta"])
+        if paleta_fechada:
+            paleta = paleta_fechada
         else:
             cores = list(ceu) + [atmosfera, luz]
             for rampa in rampas.values():
@@ -200,7 +207,8 @@ class Estilo:
                 cores.append(hex_para_rgb(dados["contorno_cor"]))
             paleta = sem_quase_iguais(cores)  # rampa misturada com a atmosfera cai a 1 ou 2 de outra cor
         if epoca is not None:
-            paleta = reduzir_paleta(sem_repetir(na_grade(c, epoca.grade) for c in paleta), epoca.cores_cena)
+            paleta = reduzir_paleta(sem_repetir(na_grade(c, epoca.grade) for c in [*com_matiz_da_grade, *paleta]),
+                                    epoca.cores_cena)
         if len(paleta) > 256:
             raise ValueError(f"paleta com {len(paleta)} cores; o limite é 256")
 
@@ -215,6 +223,7 @@ class Estilo:
         if len(direcao) != 2 or direcao == (0, 0) or any(abs(v) > 1 for v in direcao):
             raise ValueError("direcao_luz deve ser [x, y] com valores -1, 0 ou 1, sem ser [0, 0]")
 
+        paleta_menor_que_a_rampa = epoca is not None and len(paleta) < epoca.passos
         return cls(
             nome=str(dados["nome"]),
             descricao=str(dados.get("descricao", "")),
@@ -234,7 +243,7 @@ class Estilo:
             tom_base=float(dados.get("tom_base", 0.5)),
             degraus=epoca.degraus if epoca else 1,
             textura=epoca.textura if epoca else 0.0,
-            selout=epoca is not None and epoca.contorno == "selout",
+            selout=epoca is not None and epoca.contorno == "selout" and not paleta_menor_que_a_rampa,
             geracao=epoca,
             rampas_do_tema=rampas_do_tema,
             origem=dict(dados),
@@ -276,6 +285,8 @@ def _com_a_tecnica(dados: dict[str, Any], epoca: Geracao) -> dict[str, Any]:
     }
     if epoca.contorno == "preto":
         novos["contorno_cor"] = "#000000"
+        if "paleta" in dados:
+            novos["paleta"] = [*dados["paleta"], "#000000"]
     return novos
 
 
