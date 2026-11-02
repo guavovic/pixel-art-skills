@@ -2,6 +2,7 @@
 
     pip install pixel-art-skills[mcp]
     pixel-atelier mcp [--raiz pasta]
+    pixel-atelier mcp --http [--host 127.0.0.1] [--porta 8000] [--raiz pasta]   # para os chats do navegador
 
 Toda ferramenta responde em texto curto e nunca devolve a imagem. Erro de receita volta como a
 lista de problemas, sem stack trace.
@@ -13,16 +14,23 @@ atalho que leve para fora é recusado. A exceção é `registrar_estilo` e `ref`
 pasta de presets do usuário (a mesma da linha de comando), com nome validado (o nome de estilo nunca é caminho: só preset ou .json); a imagem que `ref`
 lê fica dentro da raiz.
 
+Por HTTP, o servidor só responde em `/<token>/mcp`: o token no caminho é a senha (os conectores
+do ChatGPT não mandam cabeçalho fixo, então a URL é o único lugar que os dois chats aceitam).
+
 Ferramenta nova entra em `criar_servidor` com `@ferramenta(name=...)`: uma função por ferramenta,
 com a docstring curta (é a descrição que o agente lê a cada sessão).
 """
 from __future__ import annotations
 
+import os
+import re
+import secrets
 from pathlib import Path
 from typing import Annotated, Any
 
 from mcp.server.mcpserver import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
+from mcp.server.transport_security import TransportSecuritySettings
 from mcp.types import ToolAnnotations
 from pydantic import Field
 
@@ -41,6 +49,27 @@ INSTRUCOES = ("Pixel art a partir de uma receita JSON curta. Primeiro passo, ant
               "Respostas em texto; abra o PNG só na aprovação final.")
 
 SO_LEITURA = ToolAnnotations(read_only_hint=True)
+
+VARIAVEL_DO_TOKEN = "PIXEL_ATELIER_TOKEN"
+TOKEN_VALIDO = re.compile(r"[A-Za-z0-9_-]{32,}")
+
+
+def token_http() -> str:
+    """Token do caminho HTTP: o de `PIXEL_ATELIER_TOKEN` ou um novo, aleatório, a cada subida."""
+    token = os.environ.get(VARIAVEL_DO_TOKEN) or secrets.token_urlsafe(32)
+    if not TOKEN_VALIDO.fullmatch(token):
+        raise ValueError(f"{VARIAVEL_DO_TOKEN} precisa de 32 caracteres ou mais, só letras, números, - e _")
+    return token
+
+
+def opcoes_http(token: str) -> dict[str, Any]:
+    """Opções do transporte streamable-http: só `/<token>/mcp` responde, o resto dá 404.
+
+    A resposta vem em JSON, sem SSE, porque o túnel rápido do Cloudflare não repassa SSE. A conferência
+    do cabeçalho Host fica desligada porque pelo túnel ele traz o endereço público; quem protege é o token.
+    """
+    return {"streamable_http_path": f"/{token}/mcp", "json_response": True, "stateless_http": True,
+            "transport_security": TransportSecuritySettings(enable_dns_rebinding_protection=False)}
 
 
 def dentro_da_raiz(raiz: Path, caminho: str | Path, o_que: str) -> Path:

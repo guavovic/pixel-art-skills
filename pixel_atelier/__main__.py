@@ -8,6 +8,7 @@
     python -m pixel_atelier ref referencia.png [--nome nome] [--base preset] [--cores 32] [--sobrescrever]
     python -m pixel_atelier guia [capitulo]                      # guia de pixel art: o índice ou um capítulo
     python -m pixel_atelier mcp [--raiz pasta]                   # servidor MCP por stdio (extra [mcp])
+    python -m pixel_atelier mcp --http [--host 127.0.0.1] [--porta 8000] [--raiz pasta]   # por HTTP, com token na URL
 
 Sem `--pasta`, `gerar` grava ao lado do arquivo da receita (ou na pasta atual, com "-").
 Receita inválida sai com código 2 e a lista de problemas. `revisar` sai com 0 mesmo com alerta
@@ -85,8 +86,12 @@ def _guia(args: argparse.Namespace) -> int:
 
 
 def _mcp(args: argparse.Namespace) -> int:
+    endereco_sem_http = not args.http and (args.host is not None or args.porta is not None)
+    if endereco_sem_http:
+        print("--host e --porta só valem com --http", file=sys.stderr)
+        return 2
     try:
-        from .servidor import criar_servidor
+        from .servidor import criar_servidor, opcoes_http, token_http
     except ImportError as erro:
         if not (erro.name or "").startswith("mcp"):
             raise
@@ -97,7 +102,21 @@ def _mcp(args: argparse.Namespace) -> int:
         print(f"raiz {raiz.as_posix()} não é uma pasta", file=sys.stderr)
         return 2
     os.chdir(raiz)  # estilo por caminho dentro da receita também parte da raiz
-    criar_servidor(Path.cwd()).run("stdio")
+    servidor = criar_servidor(Path.cwd())
+    if not args.http:
+        servidor.run("stdio")
+        return 0
+    try:
+        token = token_http()
+    except ValueError as erro:
+        print(erro, file=sys.stderr)
+        return 2
+    host, porta = args.host or "127.0.0.1", args.porta or 8000
+    print(f"servidor MCP por HTTP em http://{host}:{porta}/{token}/mcp",
+          f"para os chats do navegador: cloudflared tunnel --url http://{host}:{porta}",
+          f"e cadastre o conector com https://<endereço do túnel>/{token}/mcp",
+          "o token na URL é a senha: não compartilhe o endereço", sep="\n", flush=True)
+    servidor.run("streamable-http", host=host, port=porta, **opcoes_http(token))
     return 0
 
 
@@ -150,8 +169,13 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("capitulo", nargs="?", help="nome do capítulo (sem ele, o índice)")
     p.set_defaults(funcao=_guia)
 
-    p = comandos.add_parser("mcp", help="sobe o servidor MCP por stdio")
+    p = comandos.add_parser("mcp", help="sobe o servidor MCP por stdio (ou por HTTP, com --http)")
     p.add_argument("--raiz", type=Path, help="única pasta onde o servidor lê e grava (padrão: a atual)")
+    p.add_argument("--http", action="store_true",
+                   help="transporte streamable-http no lugar do stdio; a URL leva um token (o de PIXEL_ATELIER_TOKEN, "
+                        "ou um novo a cada subida)")
+    p.add_argument("--host", help="endereço onde o HTTP escuta (padrão: 127.0.0.1)")
+    p.add_argument("--porta", type=int, help="porta do HTTP (padrão: 8000)")
     p.set_defaults(funcao=_mcp)
 
     args = parser.parse_args(argv)
