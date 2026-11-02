@@ -2,6 +2,8 @@
 
 ## Não lançado
 
+- **Servidor MCP por HTTP:** `mcp --http` sobe o servidor em streamable-http com um token obrigatório na URL, para usar o ateliê pelos chats do navegador (claude.ai e ChatGPT) através de um túnel como o do Cloudflare. O stdio continua o padrão. Passo a passo em `docs/referencia.md`, seção Chats do navegador.
+
 ## v0.1.0 (27/10/2026)
 
 Primeira versão.
