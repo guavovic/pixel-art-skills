@@ -2,6 +2,8 @@
 
 ## Não lançado
 
+- **Documentação:** seção "Limites conhecidos" na referência, com o que o `revisar` e o `ref` não pegam ou alertam à toa (legibilidade, pillow e serrilhado sem camadas, composição repetida, linha 2:1 da nuvem, pontilhado e contorno no `ref`) e as medições de 27/10/2026.
+
 ## v0.1.0 (27/10/2026)
 
 Primeira versão.

@@ -250,6 +250,25 @@ aviso: 56 cores na referência; paleta reduzida para 32 (cores sobe o limite)
 - **Contraste**: faixa de valor (p5 a p95, como no `revisar`) e o passo de valor de cada rampa, no texto e no bloco `referencia` do preset.
 - **Base**: o que a imagem não diz (sombreamento, contorno, direção da luz, papel sem família quando nenhuma domina) vem de `--base`, um preset (mesmo nome e mesma mensagem de erro do `gerar` e do `revisar`) ou um `.json`. A paleta do preset é fechada nas cores da referência, então até o que vem da base é pintado só com elas.
 
+## Limites conhecidos
+
+O que o `revisar` e o `ref` não pegam, ou podem apontar à toa. Medições de 27/10/2026: nenhuma medida testada separa erro de verdade de alerta falso, então o limite fica documentado em vez de virar regra mais frouxa ou mais dura.
+
+- **Sem camadas, legibilidade, pillow shading e serrilhado ficam `pulada`.** No composto a silhueta se corta na que está na frente. Em 200 cenas sorteadas, a legibilidade pelo composto deu 47 alertas falsos (todos no noturno, onde o chão e as pedras do pé entram como frente) e 3 erros perdidos; cortar as silhuetas pela cobertura do pé não resolveu (47, 48, 47 e 43 falsos). O pillow pelo composto deu 28 falsos (com camadas, 0). O serrilhado pelo composto deu 0 falsos, mas a revisão com camadas também não achou serrilhado nenhum na amostra, então não se sabe se ele pega; fica desligado até haver uma amostra com serrilhado de verdade. O contraste pelo composto fica ligado (0 falsos, perde 4). O que fazer: passar as camadas ao `revisar` (a pasta que o `gerar` grava, ou `--camadas`) e, numa imagem sem camadas, conferir legibilidade, pillow e serrilhado no olho na aprovação final.
+- **Composição repetida pode alertar à toa em janela de borda curva lisa.** Em seeds 3 a 12 nos 3 temas (1740 casos), 36 alertas, todos em janelas sobre borda curva lisa com faixas de sombra paralelas à borda. A auto-semelhança da janela não separa (janelas de objeto: mediana 0,75, p95 0,91, máx 0,98). Num teste de 200 cenas com um recorte real carimbado 3 vezes:
+
+  | critério | falsos | carimbos pegos |
+  | --- | --- | --- |
+  | atual | 3/200 | 146/200 |
+  | exclui auto-semelhança de 0,9 ou mais | 0 | 139 |
+  | exclui auto-semelhança de 0,92 ou mais | 1 | 144 |
+  | bloco 2x2 de origens, todas detalhadas | 0 | 137 |
+  | bloco 2x2 de origens, ao menos uma detalhada | 2 | 145 |
+
+  Nenhum critério zera o falso sem perder carimbo, e trocar 3 falsos por 7 a 9 carimbos perdidos não se justifica. O que fazer: se o alerta cair numa borda curva lisa, é falso, conferir no olho e seguir.
+- **Linha 2:1 da nuvem.** A `nuvem_fofa` é a união de 4 a 7 elipses, e o platô de um calombo meio escondido deixa um degrau de 5 entre degraus de 2. Numa camada de nuvem sozinha (snes, 9 gerações por 60 seeds) deu 1 alerta em 540: a seed 8 na âncora 32. Não há correção que não mude o traço de toda nuvem. O que fazer: nesse caso, trocar a seed.
+- **`ref` não detecta pontilhado nem contorno.** A fração de pixels em xadrez 2x2 fica em 0,028 a 0,083 nas faixas e 0,028 a 0,108 no pontilhado (névoa, raios e neve já pontilham em qualquer estilo), e a fração da borda entre famílias na cor mais escura se sobrepõe entre estilos com e sem contorno e muda de tema para tema. O preset gravado pelo `ref` traz paleta, rampas e contraste; sombreamento e contorno vêm da `--base`. O que fazer: escolher uma `--base` com o sombreamento e o contorno da referência.
+
 ## Embalagens
 
 O mesmo ateliê empacotado para cada ferramenta de agente, gerado de uma fonte só (`AGENTS.md`, guia, ferramentas do `servidor.py` e `pyproject.toml`) por `python scripts/embalar.py`. Cada embalagem registra o servidor MCP e leva o fluxo: estilo ou `ref`, receita, `gerar`, `revisar` em texto, imagem só na aprovação final. Onde colocar cada uma, e a situação de cada ferramenta, está em [`embalagens/README.md`](../embalagens/README.md).
