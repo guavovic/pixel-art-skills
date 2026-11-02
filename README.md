@@ -60,7 +60,7 @@ No Claude Code, o plugin entra por dentro de uma sessão:
 | Cursor | regra em `.cursor/rules/` e servidor em `.cursor/mcp.json` | formato validado pela documentação e servidor testado com cliente MCP; teste de ponta a ponta pendente |
 | GitHub Copilot | `copilot-instructions.md` e servidor em `mcp.json` (VS Code e Copilot CLI) | formato validado pela documentação e servidor testado com cliente MCP; teste de ponta a ponta pendente |
 
-Onde colocar cada embalagem está em [`embalagens/README.md`](https://github.com/guavovic/pixel-art-skills/blob/main/embalagens/README.md). Outro cliente MCP usa a configuração `mcpServers` da [referência](https://github.com/guavovic/pixel-art-skills/blob/main/docs/referencia.md#servidor-mcp).
+Onde colocar cada embalagem está em [`embalagens/README.md`](https://github.com/guavovic/pixel-art-skills/blob/main/embalagens/README.md). Outro cliente MCP usa a configuração `mcpServers` da [referência](https://github.com/guavovic/pixel-art-skills/blob/main/docs/referencia.md#servidor-mcp). Os chats do navegador (claude.ai e ChatGPT) ligam no servidor por HTTP com um túnel, passo a passo [na referência](https://github.com/guavovic/pixel-art-skills/blob/main/docs/referencia.md#chats-do-navegador).
 
 ## Como foi feito
 

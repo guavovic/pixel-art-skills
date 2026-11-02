@@ -118,7 +118,7 @@ Toda forma tem a mesma assinatura: `forma(estilo, largura, altura, *, seed=0, pr
 
 ## Servidor MCP
 
-`servidor.py` expõe o ateliê por MCP (stdio), para qualquer cliente que fale o protocolo. O núcleo continua só com Pillow; o servidor vem no extra `mcp`.
+`servidor.py` expõe o ateliê por MCP, para qualquer cliente que fale o protocolo: por stdio (o padrão) ou por HTTP, para os [chats do navegador](#chats-do-navegador). O núcleo continua só com Pillow; o servidor vem no extra `mcp`.
 
 ```
 pip install "pixel-art-skills[mcp] @ git+https://github.com/guavovic/pixel-art-skills"
@@ -282,7 +282,22 @@ python scripts/embalar.py --conferir  # sai com 1 se alguma estiver desatualizad
 
 ### Chats do navegador
 
-Os chats no navegador (claude.ai, ChatGPT) só ligam servidor MCP remoto: o conector recebe uma URL HTTPS e quem conecta é a nuvem do serviço, não o computador de quem usa. O pixel-atelier é um servidor local por stdio, que grava os PNGs numa pasta do projeto; para virar conector ele precisaria ser hospedado com transporte HTTP, e as imagens ficariam no servidor, longe do projeto. Por isso não há embalagem de conector. No computador, o Claude Desktop e outros clientes que aceitam servidor local podem usar a configuração `mcpServers` da seção acima.
+Os chats no navegador (claude.ai, ChatGPT) só ligam servidor MCP remoto: o conector recebe uma URL HTTPS e quem conecta é a nuvem do serviço, não o computador de quem usa. Para eles, o servidor sobe por HTTP no próprio PC e um túnel dá a URL pública. Os PNGs continuam na pasta do projeto (a raiz), e o conector só funciona com o PC ligado e os dois comandos abertos.
+
+```
+python -m pixel_atelier mcp --http --raiz caminho/do/projeto   # escuta em 127.0.0.1:8000 (--host e --porta trocam)
+cloudflared tunnel --url http://127.0.0.1:8000                  # noutro terminal
+```
+
+O servidor imprime a URL local com um token no caminho, `http://127.0.0.1:8000/<token>/mcp`, e só responde nela: qualquer outro caminho dá 404. O token é a senha, então a URL não se compartilha. Ele muda a cada subida; para fixar, ponha um seu em `PIXEL_ATELIER_TOKEN` (32 caracteres ou mais, só letras, números, `-` e `_`, por exemplo o de `python -c "import secrets; print(secrets.token_urlsafe(32))"`). Não há como subir o HTTP sem token.
+
+O `cloudflared` ([instalação](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/downloads/)) abre um túnel rápido, sem conta: ele imprime um endereço `https://<nome>.trycloudflare.com`, que muda a cada vez. A URL do conector é esse endereço com o caminho do token: `https://<nome>.trycloudflare.com/<token>/mcp`. O túnel rápido não repassa SSE, por isso o servidor responde em JSON simples.
+
+**claude.ai** ([guia oficial](https://support.claude.com/en/articles/11175166-getting-started-with-custom-connectors-using-remote-mcp)): em Customize > Connectors, "+" > Add custom connector. Dê um nome, cole a URL do conector, em Authentication escolha No sign in e termine com Add. No plano gratuito cabe um conector personalizado. O conector não se edita: com URL nova (túnel ou token novos), remova e adicione de novo.
+
+**ChatGPT** ([guia oficial](https://developers.openai.com/api/docs/guides/developer-mode)): em Settings > Apps > Advanced settings, ligue o Developer mode e use Create app. Dê um nome, cole a URL do conector, em Authentication escolha No authentication, confirme o aviso e crie. Com URL nova, crie de novo.
+
+O claude.ai aceita OAuth, conector sem login ou cabeçalho fixo; o ChatGPT só OAuth ou sem login, sem chave fixa ([autenticação no ChatGPT](https://developers.openai.com/apps-sdk/build/auth)). Por isso o segredo vai na URL, o único lugar que os dois aceitam sem um servidor de OAuth. Quem passa pelo túnel vê a URL inteira, como em qualquer serviço na frente do servidor; para uso fora de teste, prefira um túnel com conta e domínio seu.
 
 ## Desenvolvimento
 
