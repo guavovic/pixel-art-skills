@@ -121,7 +121,7 @@ Toda forma tem a mesma assinatura: `forma(estilo, largura, altura, *, seed=0, pr
 `servidor.py` expõe o ateliê por MCP, para qualquer cliente que fale o protocolo: por stdio (o padrão) ou por HTTP, para os [chats do navegador](#chats-do-navegador). O núcleo continua só com Pillow; o servidor vem no extra `mcp`.
 
 ```
-pip install "pixel-art-skills[mcp] @ git+https://github.com/guavovic/pixel-art-skills"
+pip install "pixel-art-skills[mcp]"
 python -m pixel_atelier mcp --raiz caminho/do/projeto   # ou o comando pixel-atelier mcp, se estiver no PATH
 ```
 

@@ -13,7 +13,7 @@ Ateliê de pixel art para agentes de IA: técnica guardada no motor, arte saindo
 Esta embalagem registra o servidor `pixel-atelier` (`python -m pixel_atelier mcp --raiz <pasta do projeto>`), que só lê e grava dentro da raiz. Ele precisa estar instalado:
 
 ```
-pip install "pixel-art-skills[mcp] @ git+https://github.com/guavovic/pixel-art-skills"
+pip install "pixel-art-skills[mcp]"
 ```
 
 Ferramentas (toda resposta é texto, nenhuma devolve imagem):
