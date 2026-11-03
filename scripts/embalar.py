@@ -41,7 +41,7 @@ AUTOR = {"name": "Gustavo Victor", "url": "https://github.com/guavovic"}
 # Vira True depois da primeira publicação no PyPI (.github/workflows/publicar.yml): todas as embalagens passam a
 # mandar `pip install "<pacote>[mcp]"`. Depois de trocar, rode este script e atualize o comando no README.md e em
 # docs/referencia.md (tests/test_embalagens.py confere que os dois batem com instalar()).
-NO_PYPI = False
+NO_PYPI = True
 # Interpretador que sobe o servidor (`python -m pixel_atelier mcp`), igual em todas as embalagens: nenhuma das
 # ferramentas tem campo por sistema no servidor MCP, então vale o nome que existe em mais lugares.
 # `python` é o comando do Windows (o instalador do python.org e o venv do Windows não trazem python3; o

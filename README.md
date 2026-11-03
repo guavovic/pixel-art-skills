@@ -41,7 +41,7 @@ Ateliê de pixel art para agentes de IA. O agente escreve uma receita JSON curta
 O servidor vem do pacote Python:
 
 ```
-pip install "pixel-art-skills[mcp] @ git+https://github.com/guavovic/pixel-art-skills"
+pip install "pixel-art-skills[mcp]"
 ```
 
 No Claude Code, o plugin entra por dentro de uma sessão:

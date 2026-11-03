@@ -7,7 +7,7 @@ O pixel-atelier no formato de cada ferramenta de agente. Tudo aqui é gerado por
 Antes de qualquer uma, instale o servidor:
 
 ```
-pip install "pixel-art-skills[mcp] @ git+https://github.com/guavovic/pixel-art-skills"
+pip install "pixel-art-skills[mcp]"
 ```
 
 | Pasta | Ferramenta | O que tem | Onde colocar |
